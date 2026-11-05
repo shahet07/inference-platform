@@ -13,7 +13,8 @@ gtest_discover_tests(obs_tests)
 add_executable(server_tests
   server/bounded_queue_test.cpp
   server/batching_engine_test.cpp
-  server/http_server_test.cpp)
+  server/http_server_test.cpp
+  server/model_manager_test.cpp)
 target_link_libraries(server_tests PRIVATE
   server GTest::gtest_main GTest::gmock httplib::httplib nlohmann_json::nlohmann_json)
 gtest_discover_tests(server_tests)
@@ -57,3 +58,8 @@ add_test(NAME integration.wal_crash
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/wal_crash_test.py
     $<TARGET_FILE:wal_crash_writer>)
 set_tests_properties(integration.wal_crash PROPERTIES TIMEOUT 180)
+
+add_test(NAME integration.hot_swap
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/hot_swap_test.py
+    $<TARGET_FILE:inference_server> ${CMAKE_SOURCE_DIR}/bench/models 19300)
+set_tests_properties(integration.hot_swap PROPERTIES TIMEOUT 180)

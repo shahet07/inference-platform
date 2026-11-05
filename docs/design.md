@@ -32,6 +32,24 @@ heavy load, batches form on their own. `--max-wait-us` adds a deliberate wait fo
 batching saves more than the wait costs. The default of 1 ms that this project started with was its
 largest measured bottleneck.
 
+**Models are replaced by swapping a shared pointer.** A request holds the model it started with until its
+response is written, so a swap cannot remove a model mid-request. The old model finishes its queue and goes
+away with the last request using it. A new model runs one inference before taking traffic, which rejects
+files that load but cannot run, and a failed load leaves the current model serving.
+
+**Each model has its own queue and workers.** A busy model cannot starve another's queue. They do still
+share CPU, and nothing limits a model's share of it.
+
+**Metadata can name only plain files in `--model-dir`.** Metadata can arrive over the network from peers, and
+loading a model means parsing an untrusted file, so a uri cannot point anywhere else. There is still no
+authentication on the write itself, which the known gaps below cover.
+
+**Deadlines drop work nobody is waiting for.** With `X-Deadline-Ms`, an expired request is dropped before it
+reaches the model, so overload does not spend compute on answers no client will read.
+
+**Raw floats as well as JSON.** JSON stays as the easy default, and `application/octet-stream` skips text
+encoding. On a real image model the difference is 18.7×.
+
 **ONNX Runtime uses one thread per inference.** Concurrency comes from the worker pool. Letting
 ONNX Runtime also start a thread pool per inference would oversubscribe the cores.
 
@@ -115,8 +133,7 @@ run behind a load balancer, and the benchmarks do try several. There is no leade
 and merges by `(version, node id)`. Merging is commutative, associative, and idempotent, so nodes
 converge regardless of order, and a restarted node catches up with no help. The cost is that when two
 nodes write the same model at once, one write silently loses. This suits occasional metadata
-updates and would not suit anything needing strong consistency. A registry entry is metadata only:
-it does not load a model.
+updates and would not suit anything needing strong consistency.
 
 ## Performance layer
 
@@ -149,7 +166,6 @@ exporter dependency, but it means no Jaeger-style UI without adding one.
 ## Known gaps
 
 - No TLS or authentication. Everything binds to localhost by default and assumes a trusted network.
-- A node serves one model, chosen at startup. The registry records metadata but does not load models.
 - The event log persists to one machine's disk and is not replicated by default.
 - The router is a single instance with no failover of its own.
 - All cluster benchmarks ran on one machine, so they show this machine's limits and not those of a

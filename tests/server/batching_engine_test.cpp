@@ -3,10 +3,12 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
 #include <future>
 #include <optional>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -112,6 +114,59 @@ TEST(BatchingEngineTest, RejectsWhenQueueIsFull) {
   release.set_value();
   EXPECT_THAT(in_flight.get(), testing::ElementsAre(2.0F));
   EXPECT_THAT(queued.get(), testing::ElementsAre(4.0F));
+}
+
+TEST(BatchingEngineTest, MultiDimensionalRowsKeepTheirShape) {
+  obs::Registry registry;
+  std::vector<std::int64_t> seen;
+  std::promise<void> done;
+  BatchingEngine engine(
+      [&](std::span<const float> input, std::span<const std::int64_t> shape) {
+        seen.assign(shape.begin(), shape.end());
+        return std::vector<float>(input.begin(), input.end());
+      },
+      std::vector<std::int64_t>{2, 3},
+      EngineConfig{.workers = 1, .max_batch_size = 1, .max_wait = 0us, .queue_capacity = 8},
+      registry);
+
+  auto result = submitOrThrow(engine, std::vector<float>(6, 1.0F));
+
+  EXPECT_EQ(result.get().size(), 6U);
+  EXPECT_THAT(seen, testing::ElementsAre(1, 2, 3));
+  EXPECT_THROW((void)engine.submit(std::vector<float>(5, 1.0F)), std::invalid_argument);
+}
+
+TEST(BatchingEngineTest, ExpiredRequestsAreDroppedBeforeRunning) {
+  obs::Registry registry;
+  std::promise<void> release;
+  std::shared_future<void> released = release.get_future().share();
+  std::promise<void> running;
+  std::atomic<int> runs{0};
+  BatchingEngine engine(
+      [&](std::span<const float> input, std::span<const std::int64_t> shape) {
+        if (runs.fetch_add(1) == 0) {
+          running.set_value();
+          released.wait();
+        }
+        return doubleAll(input, shape);
+      },
+      1, EngineConfig{.workers = 1, .max_batch_size = 1, .max_wait = 0us, .queue_capacity = 8},
+      registry);
+
+  auto first = submitOrThrow(engine, {1.0F});  // Occupies the only worker.
+  running.get_future().wait();
+  auto expired = engine.submit({2.0F}, {}, std::chrono::steady_clock::now());
+  ASSERT_TRUE(expired.has_value());
+  auto alive = submitOrThrow(engine, {3.0F});
+  std::this_thread::sleep_for(1ms);
+  release.set_value();
+
+  EXPECT_THAT(first.get(), testing::ElementsAre(2.0F));
+  // NOLINTNEXTLINE(bugprone-unchecked-optional-access): checked above.
+  EXPECT_THROW((void)expired->get(), server::DeadlineExceeded);
+  EXPECT_THAT(alive.get(), testing::ElementsAre(6.0F));
+  EXPECT_EQ(runs.load(), 2);
+  EXPECT_EQ(registry.counter("inference_deadline_exceeded_total", "").value(), 1U);
 }
 
 TEST(BatchingEngineTest, RejectsWrongFeatureCount) {

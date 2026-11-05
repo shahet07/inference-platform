@@ -1,8 +1,9 @@
 #include "server/batching_engine.h"
 
 #include <algorithm>
-#include <array>
 #include <exception>
+#include <functional>
+#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -22,23 +23,37 @@ std::vector<double> batchSizeBuckets() { return {1, 2, 4, 8, 16, 32, 64, 128, 25
 
 BatchingEngine::BatchingEngine(BatchRunner runner, std::size_t features_per_row,
                                const EngineConfig& config, obs::Registry& registry)
+    : BatchingEngine(std::move(runner),
+                     std::vector<std::int64_t>{static_cast<std::int64_t>(features_per_row)}, config,
+                     registry) {}
+
+BatchingEngine::BatchingEngine(BatchRunner runner, std::vector<std::int64_t> row_shape,
+                               const EngineConfig& config, obs::Registry& registry)
     : runner_(std::move(runner)),
-      features_per_row_(features_per_row),
+      row_shape_(std::move(row_shape)),
+      features_per_row_(static_cast<std::size_t>(std::accumulate(
+          row_shape_.begin(), row_shape_.end(), std::int64_t{1}, std::multiplies<>()))),
       config_(config),
       queue_(config.queue_capacity),
-      requests_total_(registry.counter("inference_requests_total", "Requests accepted.")),
-      rejected_total_(
-          registry.counter("inference_rejected_total", "Requests rejected: queue full.")),
-      batches_total_(registry.counter("inference_batches_total", "Batches sent to the model.")),
-      queue_depth_(registry.gauge("inference_queue_depth", "Requests waiting for a worker.")),
-      batch_size_(
-          registry.histogram("inference_batch_size", "Requests per batch.", batchSizeBuckets())),
+      requests_total_(
+          registry.counter("inference_requests_total", "Requests accepted.", config.metric_labels)),
+      rejected_total_(registry.counter("inference_rejected_total", "Requests rejected: queue full.",
+                                       config.metric_labels)),
+      batches_total_(registry.counter("inference_batches_total", "Batches sent to the model.",
+                                      config.metric_labels)),
+      deadline_exceeded_total_(registry.counter("inference_deadline_exceeded_total",
+                                                "Requests dropped: deadline passed before running.",
+                                                config.metric_labels)),
+      queue_depth_(registry.gauge("inference_queue_depth", "Requests waiting for a worker.",
+                                  config.metric_labels)),
+      batch_size_(registry.histogram("inference_batch_size", "Requests per batch.",
+                                     batchSizeBuckets(), config.metric_labels)),
       queue_wait_seconds_(registry.histogram("inference_queue_wait_seconds",
                                              "Time from accepted until sent to the model.",
-                                             obs::latencyBuckets())),
+                                             obs::latencyBuckets(), config.metric_labels)),
       model_run_seconds_(registry.histogram("inference_model_run_seconds",
                                             "Model execution time per batch.",
-                                            obs::latencyBuckets())) {
+                                            obs::latencyBuckets(), config.metric_labels)) {
   workers_.reserve(config.workers);
   for (std::size_t i = 0; i < config.workers; ++i) {
     workers_.emplace_back([this] { workerLoop(); });
@@ -52,8 +67,9 @@ BatchingEngine::~BatchingEngine() {
   }
 }
 
-std::optional<std::future<std::vector<float>>> BatchingEngine::submit(std::vector<float> features,
-                                                                      obs::TraceContext trace) {
+std::optional<std::future<std::vector<float>>> BatchingEngine::submit(
+    std::vector<float> features, obs::TraceContext trace,
+    std::optional<std::chrono::steady_clock::time_point> deadline) {
   if (features.size() != features_per_row_) {
     throw std::invalid_argument("expected " + std::to_string(features_per_row_) +
                                 " features, got " + std::to_string(features.size()));
@@ -61,7 +77,8 @@ std::optional<std::future<std::vector<float>>> BatchingEngine::submit(std::vecto
   Request request{.features = std::move(features),
                   .result = {},
                   .enqueued_at = Clock::now(),
-                  .trace = std::move(trace)};
+                  .trace = std::move(trace),
+                  .deadline = deadline};
   std::future<std::vector<float>> future = request.result.get_future();
   if (!queue_.tryPush(request)) {
     rejected_total_.add();
@@ -93,6 +110,20 @@ void BatchingEngine::workerLoop() {
 
 void BatchingEngine::runBatch(std::vector<Request>& batch, perf::Arena& arena) {
   queue_depth_.add(-static_cast<std::int64_t>(batch.size()));
+  // Work nobody is waiting for any more would only delay the requests behind it.
+  const Clock::time_point now = Clock::now();
+  const auto expired = std::ranges::remove_if(batch, [&](Request& request) {
+    if (request.deadline && *request.deadline <= now) {
+      request.result.set_exception(std::make_exception_ptr(DeadlineExceeded{}));
+      deadline_exceeded_total_.add();
+      return true;
+    }
+    return false;
+  });
+  batch.erase(expired.begin(), expired.end());
+  if (batch.empty()) {
+    return;
+  }
   batches_total_.add();
   batch_size_.observe(static_cast<double>(batch.size()));
   for (const Request& request : batch) {
@@ -113,8 +144,10 @@ void BatchingEngine::runBatch(std::vector<Request>& batch, perf::Arena& arena) {
   for (std::size_t i = 0; i < batch.size(); ++i) {
     std::ranges::copy(batch[i].features, input_data + (i * features_per_row_));
   }
-  const std::array<std::int64_t, 2> shape{static_cast<std::int64_t>(batch.size()),
-                                          static_cast<std::int64_t>(features_per_row_)};
+  std::vector<std::int64_t> shape;
+  shape.reserve(row_shape_.size() + 1);
+  shape.push_back(static_cast<std::int64_t>(batch.size()));
+  shape.insert(shape.end(), row_shape_.begin(), row_shape_.end());
   try {
     const Clock::time_point started = Clock::now();
     const std::vector<float> outputs = runner_(inputs, shape);

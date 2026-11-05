@@ -70,6 +70,20 @@ curl -s localhost:8080/metrics
 curl -s localhost:8080/v1/stats
 ```
 
+Requests can name a model, set a deadline, and skip JSON:
+
+```sh
+curl -s localhost:8080/v1/models/resnet/infer -H 'X-Deadline-Ms: 100' \
+  -H 'Content-Type: application/octet-stream' --data-binary @input.bin
+```
+
+To serve more models, or replace one with no downtime, start with `--model-dir DIR`, then:
+
+```sh
+curl -X PUT localhost:8080/v1/models/resnet -d '{"uri":"resnet-v2.onnx"}'
+curl -s localhost:8080/v1/loaded
+```
+
 A demo cluster with the dashboard, at http://localhost:3000/d/inference:
 
 ```sh
@@ -101,6 +115,17 @@ Every backend is down, or the router cannot reach them.
 
 The router restores a backend after 2 good probes, about half a second, with no action needed.
 
+### A new model is not taking traffic
+
+Check `curl -s localhost:8080/v1/loaded`, `model_load_failures_total`, and the log for `model load failed` or
+`refused model uri`. The previous model keeps serving after a failure. A failed version is not retried, so
+fix the file and `PUT` again to make a new version.
+
+### Requests return 504
+
+The request's `X-Deadline-Ms` passed. If this is new, check `inference_queue_wait_seconds` and
+`rate(inference_deadline_exceeded_total[1m])`, since queueing is the usual cause.
+
 ### Latency is high
 
 1. Compare `router_forward_seconds` with `http_request_duration_seconds`. A large difference means the
@@ -131,7 +156,7 @@ drained. The event log survives the restart only if `--events-dir` is set.
 
 ## Limitations
 
-No TLS or authentication, one model per node, a single router instance. All
+No TLS or authentication, a single router instance. All
 benchmarks ran on one machine. See [design notes](docs/design.md#known-gaps).
 
 ## License

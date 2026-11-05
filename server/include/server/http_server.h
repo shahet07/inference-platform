@@ -9,13 +9,20 @@
 #include "obs/metrics.h"
 #include "obs/trace.h"
 #include "server/batching_engine.h"
+#include "server/model_manager.h"
 #include "stream/processor.h"
 #include "stream/sharded_log.h"
 
 namespace server {
 
-// HTTP front end for a BatchingEngine.
-//   POST /v1/infer  {"inputs":[...]} -> {"outputs":[...]}; 503 when the queue is full
+// HTTP front end for a ModelManager.
+//   POST /v1/infer               Runs the model named "default"
+//   POST /v1/models/{name}/infer Runs a named model
+//     JSON: {"inputs":[...]} -> {"outputs":[...]}
+//     Content-Type application/octet-stream: raw little-endian 32-bit floats, both ways
+//     X-Deadline-Ms: milliseconds this request may take, or 504
+//     503 when the model's queue is full, 404 when there is no such model
+//   GET  /v1/loaded              The models this node is serving, with versions
 //   GET  /v1/stats  Closed per-client latency windows, when an event stream is attached
 //   GET  /v1/models        Model metadata, when a registry is attached
 //   PUT  /v1/models/{name} {"uri":"..."} records a new version of a model's metadata
@@ -28,7 +35,7 @@ class HttpServer {
   // algorithm and delayed ACKs. `keep_alive_max_requests` is how many requests a connection
   // serves before it is closed; the library default of 100 forces frequent reconnects. See
   // docs/benchmarks.md for measurements of both.
-  HttpServer(BatchingEngine& engine, obs::Registry& registry, std::size_t connection_threads,
+  HttpServer(ModelManager& models, obs::Registry& registry, std::size_t connection_threads,
              bool tcp_nodelay = true, std::size_t keep_alive_max_requests = 1'000'000);
   ~HttpServer();
 

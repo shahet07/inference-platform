@@ -67,51 +67,96 @@ std::vector<double> latencyBuckets() {
   return bounds;
 }
 
-Counter& Registry::counter(const std::string& name, const std::string& help) {
-  const std::scoped_lock lock(mutex_);
-  return counters_.emplace_back(name, help).metric;
+namespace {
+
+template <typename Entries>
+auto* findEntry(Entries& entries, const std::string& name, const std::string& labels) {
+  for (auto& entry : entries) {
+    if (entry.name == name && entry.labels == labels) {
+      return &entry;
+    }
+  }
+  return static_cast<Entries::value_type*>(nullptr);
 }
 
-Gauge& Registry::gauge(const std::string& name, const std::string& help) {
+std::string series(const std::string& name, const std::string& labels) {
+  return labels.empty() ? name : name + "{" + labels + "}";
+}
+
+// Prometheus wants every series of a metric together, under one header.
+template <typename Entries, typename WriteSeries>
+void renderGroup(std::ostringstream& out, const Entries& entries, const char* type,
+                 WriteSeries write_series) {
+  std::vector<const std::string*> done;
+  for (const auto& entry : entries) {
+    if (std::ranges::any_of(done, [&](const std::string* n) { return *n == entry.name; })) {
+      continue;
+    }
+    done.push_back(&entry.name);
+    out << "# HELP " << entry.name << ' ' << entry.help << "\n# TYPE " << entry.name << ' ' << type
+        << '\n';
+    for (const auto& other : entries) {
+      if (other.name == entry.name) {
+        write_series(other);
+      }
+    }
+  }
+}
+
+}  // namespace
+
+Counter& Registry::counter(const std::string& name, const std::string& help,
+                           const std::string& labels) {
   const std::scoped_lock lock(mutex_);
-  return gauges_.emplace_back(name, help).metric;
+  if (auto* found = findEntry(counters_, name, labels)) {
+    return found->metric;
+  }
+  return counters_.emplace_back(name, help, labels).metric;
+}
+
+Gauge& Registry::gauge(const std::string& name, const std::string& help,
+                       const std::string& labels) {
+  const std::scoped_lock lock(mutex_);
+  if (auto* found = findEntry(gauges_, name, labels)) {
+    return found->metric;
+  }
+  return gauges_.emplace_back(name, help, labels).metric;
 }
 
 Histogram& Registry::histogram(const std::string& name, const std::string& help,
-                               std::vector<double> upper_bounds) {
+                               std::vector<double> upper_bounds, const std::string& labels) {
   const std::scoped_lock lock(mutex_);
-  return histograms_.emplace_back(name, help, std::move(upper_bounds)).metric;
+  if (auto* found = findEntry(histograms_, name, labels)) {
+    return found->metric;
+  }
+  return histograms_.emplace_back(name, help, labels, std::move(upper_bounds)).metric;
 }
 
 std::string Registry::renderPrometheus() const {
   const std::scoped_lock lock(mutex_);
   std::ostringstream out;
-  const auto header = [&out](const std::string& name, const std::string& help, const char* type) {
-    out << "# HELP " << name << ' ' << help << "\n# TYPE " << name << ' ' << type << '\n';
-  };
-  for (const auto& e : counters_) {
-    header(e.name, e.help, "counter");
-    out << e.name << ' ' << e.metric.value() << '\n';
-  }
-  for (const auto& e : gauges_) {
-    header(e.name, e.help, "gauge");
-    out << e.name << ' ' << e.metric.value() << '\n';
-  }
-  for (const auto& e : histograms_) {
-    header(e.name, e.help, "histogram");
+  renderGroup(out, counters_, "counter", [&out](const auto& e) {
+    out << series(e.name, e.labels) << ' ' << e.metric.value() << '\n';
+  });
+  renderGroup(out, gauges_, "gauge", [&out](const auto& e) {
+    out << series(e.name, e.labels) << ' ' << e.metric.value() << '\n';
+  });
+  renderGroup(out, histograms_, "histogram", [&out](const auto& e) {
+    const std::string prefix = e.labels.empty() ? "" : e.labels + ",";
     std::uint64_t cumulative = 0;
     const auto& bounds = e.metric.upperBounds();
     for (std::size_t i = 0; i < bounds.size(); ++i) {
       cumulative += e.metric.bucketCount(i);
-      out << e.name << "_bucket{le=\"" << bounds[i] << "\"} " << cumulative << '\n';
+      out << e.name << "_bucket{" << prefix << "le=\"" << bounds[i] << "\"} " << cumulative << '\n';
     }
     cumulative += e.metric.bucketCount(bounds.size());
-    out << e.name << "_bucket{le=\"+Inf\"} " << cumulative << '\n';
-    out << e.name << "_sum " << e.metric.sum() << '\n';
-    out << e.name << "_count " << e.metric.count() << '\n';
-  }
-  header("process_cpu_seconds_total", "User and system CPU time used by this process.", "counter");
-  out << "process_cpu_seconds_total " << processCpuSeconds() << '\n';
+    out << e.name << "_bucket{" << prefix << "le=\"+Inf\"} " << cumulative << '\n';
+    out << series(e.name + "_sum", e.labels) << ' ' << e.metric.sum() << '\n';
+    out << series(e.name + "_count", e.labels) << ' ' << e.metric.count() << '\n';
+  });
+  out << "# HELP process_cpu_seconds_total User and system CPU time used by this process.\n"
+         "# TYPE process_cpu_seconds_total counter\n"
+      << "process_cpu_seconds_total " << processCpuSeconds() << '\n';
   return out.str();
 }
 

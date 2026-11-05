@@ -2,12 +2,18 @@
 
 #include <httplib.h>
 
+#include <charconv>
 #include <chrono>
+#include <cstdint>
+#include <cstring>
 #include <exception>
+#include <future>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -15,6 +21,29 @@ namespace server {
 namespace {
 
 constexpr const char* kJson = "application/json";
+constexpr const char* kBinary = "application/octet-stream";
+
+std::vector<float> decodeFloats(const std::string& body) {
+  if (body.size() % sizeof(float) != 0) {
+    throw std::invalid_argument("binary body must be a whole number of 32-bit floats");
+  }
+  std::vector<float> values(body.size() / sizeof(float));
+  std::memcpy(values.data(), body.data(), body.size());
+  return values;
+}
+
+std::int64_t parseDeadlineMs(const httplib::Request& req) {
+  const std::string text = req.get_header_value("X-Deadline-Ms");
+  std::int64_t value = 0;
+  const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+  // Capped well below what would overflow when added to the clock.
+  constexpr std::int64_t kMaxMs = std::int64_t{1000} * 60 * 60 * 24;
+  if (error != std::errc{} || end != text.data() + text.size() || value < 0 || value > kMaxMs) {
+    throw std::invalid_argument(
+        "X-Deadline-Ms must be a whole number of milliseconds, up to a day");
+  }
+  return value;
+}
 
 void sendError(httplib::Response& res, int status, const std::string& message) {
   res.status = status;
@@ -24,14 +53,14 @@ void sendError(httplib::Response& res, int status, const std::string& message) {
 }  // namespace
 
 struct HttpServer::Impl {
-  Impl(BatchingEngine& e, obs::Registry& r)
-      : engine(e),
+  Impl(ModelManager& m, obs::Registry& r)
+      : manager(m),
         registry(r),
         request_seconds(r.histogram("http_request_duration_seconds",
                                     "Time spent handling POST /v1/infer.", obs::latencyBuckets())) {
   }
 
-  void handleInfer(const httplib::Request& req, httplib::Response& res) {
+  void handleInfer(const httplib::Request& req, httplib::Response& res, const std::string& name) {
     const auto started = std::chrono::steady_clock::now();
     const auto wall_started = std::chrono::system_clock::now();
     std::optional<obs::TraceContext> incoming;
@@ -40,32 +69,62 @@ struct HttpServer::Impl {
       incoming = obs::parseTraceparent(req.get_header_value("traceparent"));
       trace = tracer->startOrContinue(incoming);
     }
+
+    // Held until the response is written, so a hot swap cannot remove the model mid-request.
+    const std::shared_ptr<ServingModel> model = manager.get(name);
+    if (model == nullptr) {
+      sendError(res, 404, "no such model: " + name);
+      return;
+    }
+
+    const bool binary = req.get_header_value("Content-Type") == kBinary;
+    std::optional<std::chrono::steady_clock::time_point> deadline;
     std::vector<float> features;
     try {
-      features = nlohmann::json::parse(req.body).at("inputs").get<std::vector<float>>();
+      if (req.has_header("X-Deadline-Ms")) {
+        deadline = started + std::chrono::milliseconds(parseDeadlineMs(req));
+      }
+      features = binary ? decodeFloats(req.body)
+                        : nlohmann::json::parse(req.body).at("inputs").get<std::vector<float>>();
     } catch (const nlohmann::json::exception& e) {
+      sendError(res, 400, e.what());
+      return;
+    } catch (const std::invalid_argument& e) {
       sendError(res, 400, e.what());
       return;
     }
     try {
-      auto result = engine.submit(std::move(features), trace);
+      auto result = model->engine().submit(std::move(features), trace, deadline);
       if (!result) {
         res.set_header("Retry-After", "1");
         sendError(res, 503, "queue full");
         if (logger != nullptr && reject_limiter.allow()) {
-          logger->warn("shedding load: queue full");
+          logger->warn("shedding load: queue full", {{"model", name}});
         }
         return;
       }
-      res.set_content(nlohmann::json{{"outputs", result->get()}}.dump(), kJson);
+      if (deadline && result->wait_until(*deadline) == std::future_status::timeout) {
+        throw DeadlineExceeded{};
+      }
+      const std::vector<float> outputs = result->get();
+      if (binary) {
+        res.set_content(std::string(reinterpret_cast<const char*>(outputs.data()),
+                                    outputs.size() * sizeof(float)),
+                        kBinary);
+      } else {
+        res.set_content(nlohmann::json{{"outputs", outputs}}.dump(), kJson);
+      }
       res.status = 200;  // The library only fills this in after the handler, too late for the span.
+      res.set_header("X-Model-Version", std::to_string(model->version()));
       recordEvent(req, started);
+    } catch (const DeadlineExceeded& e) {
+      sendError(res, 504, e.what());
     } catch (const std::invalid_argument& e) {
       sendError(res, 400, e.what());
     } catch (const std::exception& e) {
       sendError(res, 500, e.what());
       if (logger != nullptr && error_limiter.allow()) {
-        logger->error("inference failed", {{"error", std::string(e.what())}});
+        logger->error("inference failed", {{"model", name}, {"error", std::string(e.what())}});
       }
     }
     const auto elapsed = std::chrono::steady_clock::now() - started;
@@ -77,7 +136,7 @@ struct HttpServer::Impl {
                       .name = "server.request",
                       .start = wall_started,
                       .duration = std::chrono::duration_cast<std::chrono::microseconds>(elapsed),
-                      .attributes = {{"status", std::to_string(res.status)}}});
+                      .attributes = {{"status", std::to_string(res.status)}, {"model", name}}});
     }
   }
 
@@ -118,23 +177,30 @@ struct HttpServer::Impl {
   cluster::ModelRegistry* models = nullptr;
   stream::ShardedLog* events = nullptr;
   const stream::StreamProcessor* processor = nullptr;
-  BatchingEngine& engine;
+  ModelManager& manager;
   obs::Registry& registry;
   obs::Histogram& request_seconds;
   httplib::Server http;
 };
 
-HttpServer::HttpServer(BatchingEngine& engine, obs::Registry& registry,
+HttpServer::HttpServer(ModelManager& models, obs::Registry& registry,
                        std::size_t connection_threads, bool tcp_nodelay,
                        std::size_t keep_alive_max_requests)
-    : impl_(std::make_unique<Impl>(engine, registry)) {
+    : impl_(std::make_unique<Impl>(models, registry)) {
   impl_->http.set_tcp_nodelay(tcp_nodelay);
   impl_->http.set_keep_alive_max_count(keep_alive_max_requests);
   impl_->http.new_task_queue = [connection_threads] {
     return new httplib::ThreadPool(connection_threads);
   };
   impl_->http.Post("/v1/infer", [this](const httplib::Request& req, httplib::Response& res) {
-    impl_->handleInfer(req, res);
+    impl_->handleInfer(req, res, "default");
+  });
+  impl_->http.Post("/v1/models/:name/infer",
+                   [this](const httplib::Request& req, httplib::Response& res) {
+                     impl_->handleInfer(req, res, req.path_params.at("name"));
+                   });
+  impl_->http.Get("/v1/loaded", [this](const httplib::Request&, httplib::Response& res) {
+    res.set_content(nlohmann::json{{"models", impl_->manager.versions()}}.dump(), kJson);
   });
   impl_->http.Get("/healthz", [](const httplib::Request&, httplib::Response& res) {
     res.set_content("ok\n", "text/plain");

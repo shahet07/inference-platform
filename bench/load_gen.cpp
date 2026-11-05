@@ -34,6 +34,7 @@ struct Options {
   double warmup_seconds = 2;
   double rate = 0;
   bool tcp_nodelay = true;
+  bool binary = false;        // Send raw floats instead of JSON.
   bool routing_keys = false;  // Send a per-connection X-Routing-Key header.
 };
 
@@ -57,6 +58,8 @@ ConnectionResult runConnection(const Options& options, const std::string& body,
     headers.emplace("X-Routing-Key", "client-" + std::to_string(index));
   }
 
+  const char* content_type = options.binary ? "application/octet-stream" : "application/json";
+
   ConnectionResult result;
   const std::chrono::duration<double> interval(
       options.rate > 0 ? static_cast<double>(options.connections) / options.rate : 0.0);
@@ -74,7 +77,7 @@ ConnectionResult runConnection(const Options& options, const std::string& body,
     if (start >= stop_at) {
       return result;
     }
-    const auto response = client.Post("/v1/infer", headers, body, "application/json");
+    const auto response = client.Post("/v1/infer", headers, body, content_type);
     const Clock::time_point end = Clock::now();
     if (start < measure_from) {
       continue;
@@ -134,6 +137,9 @@ Options parseOptions(std::span<char*> args) {
   if (flags.contains("rate")) {
     o.rate = std::stod(flags["rate"]);
   }
+  if (flags.contains("binary")) {
+    o.binary = flags["binary"] != "0";
+  }
   if (flags.contains("routing-keys")) {
     o.routing_keys = flags["routing-keys"] != "0";
   }
@@ -154,7 +160,10 @@ int main(int argc, char** argv) {
     for (std::size_t i = 0; i < inputs.size(); ++i) {
       inputs[i] = static_cast<float>(i % 7) * 0.125F;
     }
-    const std::string body = nlohmann::json{{"inputs", inputs}}.dump();
+    const std::string body = options.binary
+                                 ? std::string(reinterpret_cast<const char*>(inputs.data()),
+                                               inputs.size() * sizeof(float))
+                                 : nlohmann::json{{"inputs", inputs}}.dump();
 
     const auto begin = Clock::now();
     const auto seconds = [](double s) {

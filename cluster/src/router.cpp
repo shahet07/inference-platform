@@ -132,9 +132,12 @@ struct Router::Impl {
       key = req.get_header_value("X-Client-Id");
     }
     httplib::Headers forwarded;
-    if (req.has_header("X-Client-Id")) {
-      forwarded.emplace("X-Client-Id", req.get_header_value("X-Client-Id"));
+    for (const char* name : {"X-Client-Id", "X-Deadline-Ms"}) {
+      if (req.has_header(name)) {
+        forwarded.emplace(name, req.get_header_value(name));
+      }
     }
+    const std::string content_type = req.get_header_value("Content-Type", kJson);
     const auto wall_started = std::chrono::system_clock::now();
     const auto request_started = std::chrono::steady_clock::now();
     std::optional<obs::TraceContext> incoming;
@@ -172,7 +175,7 @@ struct Router::Impl {
       ClientPool& pool = *pools.at(backend);
       auto client = pool.acquire();
       const auto started = std::chrono::steady_clock::now();
-      auto response = client->Post("/v1/infer", forwarded, req.body, kJson);
+      auto response = client->Post(req.path, forwarded, req.body, content_type);
       forward_seconds.observe(
           std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count());
       if (!response) {
@@ -190,7 +193,10 @@ struct Router::Impl {
       if (response->has_header("Retry-After")) {
         res.set_header("Retry-After", response->get_header_value("Retry-After"));
       }
-      res.set_content(response->body, kJson);
+      if (response->has_header("X-Model-Version")) {
+        res.set_header("X-Model-Version", response->get_header_value("X-Model-Version"));
+      }
+      res.set_content(response->body, response->get_header_value("Content-Type", kJson));
       finishTrace();
       return;
     }
@@ -221,9 +227,11 @@ Router::Router(const RouterConfig& config, obs::Registry& registry)
   impl_->http.new_task_queue = [threads] { return new httplib::ThreadPool(threads); };
   impl_->http.set_tcp_nodelay(true);
   impl_->http.set_keep_alive_max_count(1'000'000);
-  impl_->http.Post("/v1/infer", [this](const httplib::Request& req, httplib::Response& res) {
+  const auto forward = [this](const httplib::Request& req, httplib::Response& res) {
     impl_->handleInfer(req, res);
-  });
+  };
+  impl_->http.Post("/v1/infer", forward);
+  impl_->http.Post("/v1/models/:name/infer", forward);
   impl_->http.Get("/healthz", [this](const httplib::Request&, httplib::Response& res) {
     if (impl_->healthy_backends.value() > 0) {
       res.set_content("ok\n", "text/plain");

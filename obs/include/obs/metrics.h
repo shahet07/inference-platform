@@ -5,6 +5,7 @@
 #include <deque>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace obs {
@@ -53,14 +54,16 @@ class Histogram {
 // Latency buckets from 50 microseconds to about 13 seconds, in seconds.
 std::vector<double> latencyBuckets();
 
-// Owns metrics and renders them in the Prometheus text format. Returned references stay valid
-// for the registry's lifetime.
+// Owns metrics and renders them in the Prometheus text format. Asking again for the same name and
+// labels returns the same metric, so counts carry on when, say, a model is replaced. Returned
+// references stay valid for the registry's lifetime. `labels` looks like: model="resnet"
 class Registry {
  public:
-  Counter& counter(const std::string& name, const std::string& help);
-  Gauge& gauge(const std::string& name, const std::string& help);
+  Counter& counter(const std::string& name, const std::string& help,
+                   const std::string& labels = "");
+  Gauge& gauge(const std::string& name, const std::string& help, const std::string& labels = "");
   Histogram& histogram(const std::string& name, const std::string& help,
-                       std::vector<double> upper_bounds);
+                       std::vector<double> upper_bounds, const std::string& labels = "");
 
   // Also includes process_cpu_seconds_total, read when rendering.
   [[nodiscard]] std::string renderPrometheus() const;
@@ -69,10 +72,14 @@ class Registry {
   template <typename T>
   struct Entry {
     template <typename... Args>
-    Entry(std::string n, std::string h, Args&&... args)
-        : name(std::move(n)), help(std::move(h)), metric(std::forward<Args>(args)...) {}
+    Entry(std::string n, std::string h, std::string l, Args&&... args)
+        : name(std::move(n)),
+          help(std::move(h)),
+          labels(std::move(l)),
+          metric(std::forward<Args>(args)...) {}
     std::string name;
     std::string help;
+    std::string labels;
     T metric;
   };
 

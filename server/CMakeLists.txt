@@ -1,4 +1,4 @@
-add_library(server src/batching_engine.cpp src/http_server.cpp)
+add_library(server src/batching_engine.cpp src/http_server.cpp src/model_manager.cpp)
 target_include_directories(server PUBLIC include)
 target_link_libraries(server PUBLIC obs stream cluster perf PRIVATE httplib::httplib nlohmann_json::nlohmann_json)
 

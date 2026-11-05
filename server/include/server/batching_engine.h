@@ -7,6 +7,8 @@
 #include <future>
 #include <optional>
 #include <span>
+#include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -29,6 +31,14 @@ struct EngineConfig {
   bool use_arena = false;
   // When set, sampled requests record queue-wait and model-run spans. Must outlive the engine.
   obs::Tracer* tracer = nullptr;
+  // Added to this engine's metrics, like: model="resnet"
+  std::string metric_labels;
+};
+
+// Set on a request's future when its deadline passed before it reached the model.
+class DeadlineExceeded : public std::runtime_error {
+ public:
+  DeadlineExceeded() : std::runtime_error("deadline exceeded") {}
 };
 
 // Runs a model on a flattened batch and returns the flattened outputs.
@@ -39,6 +49,10 @@ using BatchRunner =
 // max_batch_size or when its oldest request has waited max_wait, whichever comes first.
 class BatchingEngine {
  public:
+  // `row_shape` is one request's dimensions: {64} for a flat model, {3, 224, 224} for an image
+  // model.
+  BatchingEngine(BatchRunner runner, std::vector<std::int64_t> row_shape,
+                 const EngineConfig& config, obs::Registry& registry);
   BatchingEngine(BatchRunner runner, std::size_t features_per_row, const EngineConfig& config,
                  obs::Registry& registry);
   // Finishes every request already accepted, then stops the workers.
@@ -51,8 +65,9 @@ class BatchingEngine {
 
   // Returns nullopt if the queue is full, so callers can shed load instead of queueing forever.
   // Throws std::invalid_argument if `features` has the wrong size.
-  [[nodiscard]] std::optional<std::future<std::vector<float>>> submit(std::vector<float> features,
-                                                                      obs::TraceContext trace = {});
+  [[nodiscard]] std::optional<std::future<std::vector<float>>> submit(
+      std::vector<float> features, obs::TraceContext trace = {},
+      std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt);
 
   [[nodiscard]] std::size_t featuresPerRow() const { return features_per_row_; }
 
@@ -62,6 +77,7 @@ class BatchingEngine {
     std::promise<std::vector<float>> result;
     std::chrono::steady_clock::time_point enqueued_at;
     obs::TraceContext trace;
+    std::optional<std::chrono::steady_clock::time_point> deadline;
   };
 
   void workerLoop();
@@ -71,12 +87,14 @@ class BatchingEngine {
                    std::chrono::steady_clock::time_point run_end) const;
 
   BatchRunner runner_;
+  std::vector<std::int64_t> row_shape_;
   std::size_t features_per_row_;
   EngineConfig config_;
   BoundedQueue<Request> queue_;
   obs::Counter& requests_total_;
   obs::Counter& rejected_total_;
   obs::Counter& batches_total_;
+  obs::Counter& deadline_exceeded_total_;
   obs::Gauge& queue_depth_;
   obs::Histogram& batch_size_;
   obs::Histogram& queue_wait_seconds_;

@@ -4,6 +4,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -11,6 +12,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "cluster/model_registry.h"
@@ -21,6 +23,7 @@
 #include "runtime/onnx_model.h"
 #include "server/batching_engine.h"
 #include "server/http_server.h"
+#include "server/model_manager.h"
 #include "stream/processor.h"
 #include "stream/sharded_log.h"
 
@@ -41,6 +44,18 @@ std::size_t sizeFlag(const std::map<std::string, std::string>& flags, const std:
   return it == flags.end() ? fallback : std::stoul(it->second);
 }
 
+server::LoadedBackend loadOnnx(const std::filesystem::path& path) {
+  auto model = std::make_shared<runtime::OnnxModel>(path);
+  server::LoadedBackend backend;
+  backend.row_shape = model->inputRowShape();
+  backend.run = [model = model.get()](std::span<const float> input,
+                                      std::span<const std::int64_t> shape) {
+    return model->run(input, shape);
+  };
+  backend.owner = std::move(model);
+  return backend;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -52,7 +67,8 @@ int main(int argc, char** argv) {
              "  [--max-batch N] [--max-wait-us N] [--queue N] [--connections N]\n"
              "  [--tcp-nodelay 0|1] [--keep-alive-max N] [--events 0|1] [--window-ms N]\n"
              "  [--events-dir DIR] [--events-fsync always|interval|never] [--events-archive DIR]\n"
-             "  [--arena 0|1] [--trace-file PATH] [--trace-sample N] [--node-id ID] [--peers "
+             "  [--model-dir DIR] [--model-poll-ms N] [--arena 0|1] [--trace-file PATH] "
+             "[--trace-sample N] [--node-id ID] [--peers "
              "host:port,...] "
              "[--replication-interval-ms N]\n";
       return EXIT_FAILURE;
@@ -76,7 +92,6 @@ int main(int argc, char** argv) {
                                              sizeFlag(flags, "trace-sample", 100));
     }
 
-    const runtime::OnnxModel model(flags.at("model"));
     obs::Registry registry;
     const server::EngineConfig config{
         .workers = sizeFlag(flags, "workers", 4),
@@ -86,13 +101,10 @@ int main(int argc, char** argv) {
         .use_arena = sizeFlag(flags, "arena", 0) != 0,
         .tracer = tracer.get(),
     };
-    server::BatchingEngine engine(
-        [&model](std::span<const float> input, std::span<const std::int64_t> shape) {
-          return model.run(input, shape);
-        },
-        static_cast<std::size_t>(model.inputFeatureCount()), config, registry);
+    server::ModelManager manager(loadOnnx, config, registry, &logger);
+    manager.load("default", flags.at("model"), 0);
 
-    server::HttpServer http(engine, registry, sizeFlag(flags, "connections", 256),
+    server::HttpServer http(manager, registry, sizeFlag(flags, "connections", 256),
                             sizeFlag(flags, "tcp-nodelay", 1) != 0,
                             sizeFlag(flags, "keep-alive-max", 1000000));
 
@@ -141,6 +153,12 @@ int main(int argc, char** argv) {
       for (std::string peer; std::getline(list, peer, ',');) {
         peers.push_back(peer);
       }
+    }
+    // Metadata can only name files in this directory, so a registry write cannot load anything
+    // else.
+    if (flags.contains("model-dir")) {
+      manager.followRegistry(models, flags.at("model-dir"),
+                             std::chrono::milliseconds(sizeFlag(flags, "model-poll-ms", 200)));
     }
     std::unique_ptr<cluster::Replicator> replicator;
     if (!peers.empty()) {

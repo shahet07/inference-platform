@@ -76,6 +76,12 @@ std::int64_t OnnxModel::inputFeatureCount() const {
   return shape.empty() ? 0 : shape.back();
 }
 
+std::vector<std::int64_t> OnnxModel::inputRowShape() const {
+  const std::vector<std::int64_t> shape =
+      impl_->session.GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+  return shape.empty() ? shape : std::vector<std::int64_t>(shape.begin() + 1, shape.end());
+}
+
 std::vector<float> OnnxModel::run(std::span<const float> input,
                                   std::span<const std::int64_t> shape) const {
   validateShape(shape, input.size());

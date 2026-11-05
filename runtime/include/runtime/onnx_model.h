@@ -22,6 +22,9 @@ class OnnxModel {
 
   // Size of the model's last input dimension, i.e. the features per row of a batch.
   [[nodiscard]] std::int64_t inputFeatureCount() const;
+  // The model's input dimensions after the first, which is the batch: {3, 224, 224} for an image
+  // model, {64} for a flat one.
+  [[nodiscard]] std::vector<std::int64_t> inputRowShape() const;
 
   // Runs one inference and returns the output tensor, flattened.
   [[nodiscard]] std::vector<float> run(std::span<const float> input,

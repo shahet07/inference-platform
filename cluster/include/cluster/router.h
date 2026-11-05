@@ -26,7 +26,7 @@ struct RouterConfig {
 
 // Sends each request to a backend chosen by consistent hashing of its X-Routing-Key header
 // (falling back to X-Client-Id), so a key stays on one node while the cluster is stable.
-//   POST /v1/infer    Forwarded; the response names the backend in X-Served-By
+//   POST /v1/infer, /v1/models/{name}/infer    Forwarded; X-Served-By names the backend
 //   GET  /v1/cluster  Each backend's health
 //   GET  /healthz     200 while at least one backend is healthy
 //   GET  /metrics     Prometheus text format

@@ -18,6 +18,7 @@ SCRIPTS = [
     "run_cluster_bottleneck.py",
     "run_hardware_contention.py",
     "run_wal_bench.py",
+    "run_real_model_bench.py",
     "run_kernels_bench.py",
     "run_arena_ab.py",
     "run_tracing_overhead.py",

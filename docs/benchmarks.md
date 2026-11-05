@@ -16,7 +16,7 @@ These numbers have real limits:
   configurations and report the median of 3 to 5 runs, but differences of a few percent are not
   meaningful. Do not compare across machines.
 - **The benchmark models are small synthetic MLPs** with random weights: a repeatable compute load,
-  with no predictive value. Results may not carry over to real models, especially the batching result.
+  with no predictive value. [MobileNetV2](#a-real-model-mobilenetv2) tests whether results carry over.
 - **The load is closed loop unless stated**, which understates tail latency under overload.
   `load_gen --rate` runs open loop to avoid this.
 
@@ -113,6 +113,61 @@ Bugs these tools found during development:
 - TSan on Linux, not on macOS: the router's health thread started before construction finished, racing
   with route setup inside libstdc++'s regex code.
 - libFuzzer with UBSan: signed overflow in window arithmetic for timestamps near the 64-bit limits.
+
+### A real model: MobileNetV2
+
+The synthetic models above might mislead, so this repeats the questions on MobileNetV2 from the ONNX Model
+Zoo, quantized, with 150,528 input values per image. `tools/fetch_real_model.py` downloads it. Inputs are
+fixed synthetic data, so this measures speed and not accuracy. CPU only, one thread per inference.
+
+**Does waiting to fill a batch help?** One worker, up to 32 per batch, raw float requests:
+
+| Connections | Max wait | Requests/s | p50 ms | p99 ms | Mean batch | Model ms per batch |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | None | 240.8 | 4.11 | 4.44 | 1.0 | 3.67 |
+| 1 | 5 ms | 80.5 | 12.68 | 13.44 | 1.0 | 4.70 |
+| 1 | 20 ms | 30.2 | 33.44 | 37.96 | 1.0 | 6.38 |
+| 8 | None | 290.7 | 27.34 | 28.91 | 4.0 | 13.68 |
+| 8 | 5 ms | 222.7 | 35.97 | 38.12 | 8.0 | 27.78 |
+| 8 | 20 ms | 136.0 | 59.66 | 63.65 | 8.0 | 30.82 |
+| 32 | None | 293.3 | 109.88 | 117.87 | 15.8 | 54.06 |
+| 32 | 5 ms | 293.3 | 109.49 | 125.01 | 15.9 | 54.36 |
+| 32 | 20 ms | 277.3 | 115.24 | 126.10 | 32.0 | 109.53 |
+
+**No. Waiting never helped.** Batching itself barely saves compute here: 54.06 ms for 15.8 images is 3.42 ms
+each, against about 3.6 ms alone, about 5% less. That is on this CPU. A GPU, where batching commonly pays
+off far more, was not tested.
+
+**Workers against batching**, 32 connections:
+
+| Workers | Max batch | Requests/s | p50 ms | p99 ms |
+| --- | --- | --- | --- | --- |
+| 1 | 1 | 273.3 | 117.10 | 126.89 |
+| 4 | 1 | 1,059.7 | 30.19 | 31.64 |
+| 8 | 1 | 1,819.3 | 17.42 | 20.26 |
+| 4 | 8 | 1,098.3 | 31.67 | 41.05 |
+| 8 | 8 | 1,685.7 | 16.89 | 53.64 |
+
+Unlike the small synthetic model, this one scales with workers, reaching 6.7× at 8, because compute is now the
+limit. Batching on top adds little, and at 8 workers it has a worse p99.
+
+**JSON against raw floats**, 8 connections, 4 workers:
+
+| Protocol | Requests/s | p50 ms | p99 ms |
+| --- | --- | --- | --- |
+| `application/octet-stream` | 1,060.3 | 5.76 | 17.45 |
+| JSON | 56.7 | 141.35 | 152.13 |
+
+**Raw floats are 18.7× faster**, since the model takes under 5 ms and encoding 150,528 numbers as text takes
+far longer.
+
+### Hot-swapping models
+
+`tests/integration/hot_swap_test.py` swaps a live model 12 times through the metadata API under steady traffic
+from 4 connections. In the recorded run, none of 8,963 requests failed, and requests reported 13 different
+model versions. A corrupt file and a path outside the model directory were both refused, and the current
+model kept serving. This was in a debug build, so it shows correctness and not latency during a swap, which
+was not measured.
 
 ## Phase 2: streaming
 

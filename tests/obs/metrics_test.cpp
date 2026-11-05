@@ -48,6 +48,28 @@ TEST(RegistryTest, RendersCumulativePrometheusBuckets) {
   EXPECT_THAT(text, HasSubstr("process_cpu_seconds_total"));
 }
 
+TEST(RegistryTest, SameNameAndLabelsReturnSameMetric) {
+  obs::Registry registry;
+  registry.counter("c", "Help.", "model=\"a\"").add(1);
+  registry.counter("c", "Help.", "model=\"a\"").add(2);
+  EXPECT_EQ(registry.counter("c", "Help.", "model=\"a\"").value(), 3U);
+  EXPECT_EQ(registry.counter("c", "Help.", "model=\"b\"").value(), 0U);
+}
+
+TEST(RegistryTest, RendersLabelsWithOneHeaderPerMetric) {
+  obs::Registry registry;
+  registry.counter("c", "Help.", "model=\"a\"").add(1);
+  registry.gauge("g", "Help.");
+  registry.counter("c", "Help.", "model=\"b\"").add(2);
+  registry.histogram("h", "Help.", {1.0}, "model=\"a\"").observe(0.5);
+
+  const std::string text = registry.renderPrometheus();
+
+  EXPECT_THAT(text, HasSubstr("# TYPE c counter\nc{model=\"a\"} 1\nc{model=\"b\"} 2\n"));
+  EXPECT_THAT(text, HasSubstr("h_bucket{model=\"a\",le=\"1\"} 1\n"));
+  EXPECT_THAT(text, HasSubstr("h_count{model=\"a\"} 1\n"));
+}
+
 TEST(CounterTest, ConcurrentAddsAreNotLost) {
   obs::Counter counter;
   std::vector<std::thread> threads;
