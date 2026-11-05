@@ -28,7 +28,8 @@ model. [Read the caveats](docs/benchmarks.md#read-this-first) before quoting the
 | --- | --- |
 | `runtime/` | Model loading and inference, on ONNX Runtime |
 | `server/` | Bounded queue, batching engine, model management, HTTP frontends |
-| `net/` | Event-driven HTTP server on kqueue and epoll |
+| `net/` | Event-driven HTTP server on kqueue, epoll, and optionally io_uring |
+| `llm/` | Token streaming with continuous batching, optionally on llama.cpp |
 | `stream/` | Sharded log, consumer groups, windowed aggregation |
 | `cluster/` | Hash ring, health checks, router, metadata replication |
 | `consensus/` | Raft: leader election and a replicated log |
@@ -101,6 +102,15 @@ inference and metrics.
 
 Run routers with `--balance least-loaded` to ignore keys, and `--discover-dns name:port` to find nodes through DNS.
 `ops/autoscaler.py` adds and removes local nodes, and `ops/k8s/` holds Kubernetes manifests.
+
+To stream tokens from a real, tiny LLM (the model is a 1 MB download from
+`huggingface.co/ggml-org/models`, at `tinyllamas/stories260K.gguf`):
+
+```sh
+cmake --preset llama && cmake --build --preset llama --target llm_server
+./build/llama/llm/llm_server --model bench/models/stories260K.gguf
+curl -N localhost:8090/v1/generate -d '{"prompt":"Once upon a time","max_tokens":40,"stream":true}'
+```
 
 A demo cluster with the dashboard, at http://localhost:3000/d/inference:
 

@@ -33,6 +33,11 @@
       "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "IP_ENABLE_TLS": "ON" }
     },
     {
+      "name": "llama",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "IP_ENABLE_LLAMA": "ON" }
+    },
+    {
       "name": "fuzz",
       "inherits": "base",
       "cacheVariables": {
@@ -48,6 +53,7 @@
     { "name": "asan", "configurePreset": "asan" },
     { "name": "tsan", "configurePreset": "tsan" },
     { "name": "tls", "configurePreset": "tls" },
+    { "name": "llama", "configurePreset": "llama" },
     { "name": "fuzz", "configurePreset": "fuzz" }
   ],
   "testPresets": [

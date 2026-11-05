@@ -4,12 +4,23 @@
 
 #include <array>
 #include <cerrno>
+#include <cstdint>
+#include <stdexcept>
 #include <system_error>
 
 #if defined(__APPLE__)
 #include <sys/event.h>
 #elif defined(__linux__)
 #include <sys/epoll.h>
+#ifdef IP_HAS_IO_URING
+#include <liburing.h>
+#include <poll.h>
+
+#include <cstdlib>
+#include <cstring>
+#include <map>
+#include <string_view>
+#endif
 #else
 #error "net requires kqueue or epoll"
 #endif
@@ -148,6 +159,171 @@ class EpollPoller final : public Poller {
   int epoll_;
 };
 
+#ifdef IP_HAS_IO_URING
+
+// Uses io_uring only to learn that sockets are ready, not for the reads and writes themselves, so
+// it does not offer io_uring's main advantage of doing the I/O without a system call per operation.
+// Polls are one-shot and armed again at the start of each wait, after the caller has drained the
+// socket, which gives the same level-triggered behavior as the others.
+class UringPoller final : public Poller {
+ public:
+  UringPoller() {
+    const int result = io_uring_queue_init(4096, &ring_, 0);
+    if (result < 0) {
+      errno = -result;
+      throwErrno("io_uring_queue_init");
+    }
+  }
+  ~UringPoller() override { io_uring_queue_exit(&ring_); }
+  UringPoller(const UringPoller&) = delete;
+  UringPoller& operator=(const UringPoller&) = delete;
+  UringPoller(UringPoller&&) = delete;
+  UringPoller& operator=(UringPoller&&) = delete;
+
+  void add(int fd, std::uint64_t token, bool want_write) override {
+    watched_[token] = {
+        .fd = fd, .want_write = want_write, .read_armed = false, .write_armed = false};
+    by_fd_[fd] = token;
+    arm(token);
+  }
+
+  void setWantWrite(int fd, std::uint64_t token, bool want_write) override {
+    (void)fd;
+    const auto it = watched_.find(token);
+    if (it == watched_.end()) {
+      return;
+    }
+    it->second.want_write = want_write;
+    arm(token);
+  }
+
+  void remove(int fd) override {
+    const auto it = by_fd_.find(fd);
+    if (it == by_fd_.end()) {
+      return;
+    }
+    const std::uint64_t token = it->second;
+    const Watched& watched = watched_.at(token);
+    if (watched.read_armed) {
+      cancel(encode(token, false));
+    }
+    if (watched.write_armed) {
+      cancel(encode(token, true));
+    }
+    watched_.erase(token);
+    by_fd_.erase(it);
+    // Polls must be gone before the descriptor closes, since its number can be reused at once.
+    submit();
+  }
+
+  void wait(std::vector<PollEvent>& events, int timeout_ms) override {
+    events.clear();
+    for (const auto& [token, watched] : watched_) {
+      arm(token);
+    }
+    submit();
+    __kernel_timespec timeout{.tv_sec = timeout_ms / 1000,
+                              .tv_nsec = static_cast<long long>(timeout_ms % 1000) * 1000000};
+    io_uring_cqe* completion = nullptr;
+    const int result = io_uring_wait_cqe_timeout(&ring_, &completion, &timeout);
+    if (result == -ETIME || result == -EINTR) {
+      return;
+    }
+    if (result < 0) {
+      errno = -result;
+      throwErrno("io_uring_wait_cqe_timeout");
+    }
+    unsigned head = 0;
+    unsigned seen = 0;
+    io_uring_for_each_cqe(&ring_, head, completion) {
+      ++seen;
+      const std::uint64_t data = completion->user_data;
+      if (data == kCancelCompletion) {
+        continue;
+      }
+      const std::uint64_t token = data >> 1U;
+      const bool is_write = (data & 1U) != 0;
+      const auto it = watched_.find(token);
+      if (it == watched_.end()) {
+        continue;  // Removed since this poll was armed.
+      }
+      (is_write ? it->second.write_armed : it->second.read_armed) = false;
+      if (completion->res == -ECANCELED) {
+        continue;
+      }
+      events.push_back({.token = token, .readable = !is_write, .writable = is_write});
+    }
+    io_uring_cq_advance(&ring_, seen);
+  }
+
+  [[nodiscard]] const char* name() const override { return "io_uring"; }
+
+ private:
+  struct Watched {
+    int fd = -1;
+    bool want_write = false;
+    bool read_armed = false;
+    bool write_armed = false;
+  };
+
+  static constexpr std::uint64_t kCancelCompletion = UINT64_MAX;
+
+  static std::uint64_t encode(std::uint64_t token, bool is_write) {
+    return (token << 1U) | (is_write ? 1U : 0U);
+  }
+
+  io_uring_sqe* nextEntry() {
+    io_uring_sqe* entry = io_uring_get_sqe(&ring_);
+    if (entry == nullptr) {
+      submit();  // The submission queue is full, so send what is there.
+      entry = io_uring_get_sqe(&ring_);
+    }
+    if (entry == nullptr) {
+      throw std::runtime_error("io_uring submission queue is full");
+    }
+    return entry;
+  }
+
+  void arm(std::uint64_t token) {
+    Watched& watched = watched_.at(token);
+    if (!watched.read_armed) {
+      io_uring_sqe* entry = nextEntry();
+      io_uring_prep_poll_add(entry, watched.fd, POLLIN);
+      io_uring_sqe_set_data64(entry, encode(token, false));
+      watched.read_armed = true;
+    }
+    if (watched.want_write && !watched.write_armed) {
+      io_uring_sqe* entry = nextEntry();
+      io_uring_prep_poll_add(entry, watched.fd, POLLOUT);
+      io_uring_sqe_set_data64(entry, encode(token, true));
+      watched.write_armed = true;
+    } else if (!watched.want_write && watched.write_armed) {
+      cancel(encode(token, true));
+      watched.write_armed = false;
+    }
+  }
+
+  void cancel(std::uint64_t data) {
+    io_uring_sqe* entry = nextEntry();
+    io_uring_prep_poll_remove(entry, data);
+    io_uring_sqe_set_data64(entry, kCancelCompletion);
+  }
+
+  void submit() {
+    const int result = io_uring_submit(&ring_);
+    if (result < 0 && result != -EINTR && result != -EAGAIN && result != -EBUSY) {
+      errno = -result;
+      throwErrno("io_uring_submit");
+    }
+  }
+
+  io_uring ring_{};
+  std::map<std::uint64_t, Watched> watched_;
+  std::map<int, std::uint64_t> by_fd_;
+};
+
+#endif
+
 #endif
 
 }  // namespace
@@ -156,6 +332,14 @@ std::unique_ptr<Poller> makePoller() {
 #if defined(__APPLE__)
   return std::make_unique<KqueuePoller>();
 #else
+#ifdef IP_HAS_IO_URING
+  // NOLINTNEXTLINE(concurrency-mt-unsafe): read at startup, before anything changes the
+  // environment.
+  const char* requested = std::getenv("IP_POLLER");
+  if (requested != nullptr && std::string_view(requested) == "io_uring") {
+    return std::make_unique<UringPoller>();
+  }
+#endif
   return std::make_unique<EpollPoller>();
 #endif
 }

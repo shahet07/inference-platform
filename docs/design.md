@@ -50,6 +50,9 @@ reaches the model, so overload does not spend compute on answers no client will 
 **Raw floats as well as JSON.** JSON stays as the easy default, and `application/octet-stream` skips text
 encoding. On a real image model the difference is 18.7×.
 
+**Core ML is an option, and batching still stays off.** It was about 22× faster than the CPU on float MobileNetV2 in the
+benchmarks here, and batching gave no gain on it there either. A provider is chosen per server, not per model.
+
 **The engine keeps its mutex queue.** A lock-free queue was built and measured. It is far faster with one producer and
 one consumer and far slower under contention, and it cannot let idle workers sleep.
 
@@ -203,6 +206,17 @@ Tracing must never be able to slow a request.
 **Spans are written as JSON lines.** `tools/trace_view.py` merges them across services. This avoids an
 exporter dependency, but it means no Jaeger-style UI without adding one.
 
+## LLM serving
+
+**The scheduler knows nothing about models.** `Backend` is tokenize, one step, and release, so the same scheduler runs
+llama.cpp in production and a fake in tests. The fake also checks the contract, so it throws if a scheduler bug sends a
+wrong position or reuses a sequence that was not released.
+
+**A failed step ends the whole batch.** The state of every sequence in it is unknown afterwards.
+
+**llama.cpp is an optional build,** with its own preset, because it is a large dependency. CI tests the serving layers with
+the fake backend, and does not build the real one. The model is not committed.
+
 ## Security
 
 **API keys are stored as SHA-256 hashes.** Reading the key file does not reveal the keys, and a malformed file stops the
@@ -247,6 +261,9 @@ a router found two nodes through a shared DNS name, served requests from both, a
 - Security is opt-in: without `--api-keys` and TLS flags, anyone who can reach a port has full access. Everything binds
   to localhost by default. Peer replication and Raft traffic are not encrypted, and Raft has no authentication.
 - The directory-backed segment store is the only tiered storage backend. There is no real S3 client.
+- Kubernetes manifests have had only a client-side dry run. They are plain YAML, with no Helm chart.
+- There is no NUMA placement, and core pinning has not been benchmarked.
+- Benchmarks have not run on real x86 hardware, so AVX2's speed is unknown.
 - The event log persists to one machine's disk. The Raft log is replicated, but is a separate service with no
   compaction or membership changes, and the two are not connected.
 - All cluster benchmarks ran on one machine, so they show this machine's limits and not those of a

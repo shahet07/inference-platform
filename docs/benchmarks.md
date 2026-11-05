@@ -186,6 +186,34 @@ limit. Batching on top adds little, and at 8 workers it has a worse p99.
 **Raw floats are 18.7× faster**, since the model takes under 5 ms and encoding 150,528 numbers as text takes
 far longer.
 
+### Core ML
+
+`--provider coreml` runs models through Apple's Core ML. Float MobileNetV2, one inference thread, no networking, with
+models fixed to each batch size, since accelerators generally want static shapes. Median of 3 runs.
+
+| Provider | Batch | Images/s | ms per image |
+| --- | --- | --- | --- |
+| cpu | 1 | 75.5 | 13.25 |
+| coreml | 1 | 1,682.4 | 0.59 |
+| cpu | 8 | 74.6 | 13.40 |
+| coreml | 8 | 1,340.7 | 0.75 |
+| cpu | 32 | 74.3 | 13.46 |
+| coreml | 32 | 1,428.1 | 0.70 |
+
+**Core ML is about 22× faster than the CPU on this float model, and batching does not help it either.** Throughput at
+batch 8 and 32 is below batch 1. Core ML chooses between the GPU, Neural Engine, and CPU by itself, and these numbers
+do not show which it picked. This is one model on one chip, and NVIDIA GPUs were not tested. The quantized CPU model
+above runs about 3.6 ms per image, so for CPU serving, quantizing is the larger win.
+
+Through the server, 16 connections, raw floats, batch size 1:
+
+| Provider | Workers | Requests/s | p50 ms | p99 ms |
+| --- | --- | --- | --- | --- |
+| cpu | 1 | 75.4 | 211.01 | 224.34 |
+| cpu | 4 | 292.8 | 53.71 | 62.27 |
+| coreml | 1 | 583.6 | 28.26 | 33.73 |
+| coreml | 4 | 667.6 | 23.87 | 28.95 |
+
 ### Hot-swapping models
 
 `tests/integration/hot_swap_test.py` swaps a live model 12 times through the metadata API under steady traffic
@@ -193,6 +221,32 @@ from 4 connections. In the recorded run, none of 8,963 requests failed, and requ
 model versions. A corrupt file and a path outside the model directory were both refused, and the current
 model kept serving. This was in a debug build, so it shows correctness and not latency during a swap, which
 was not measured.
+
+### LLM streaming
+
+`llm_server` streams tokens as server-sent events, on a scheduler that batches sequences one token at a time. Under
+continuous batching, a new request joins the running batch at the next step, and a finished one's slot is reused
+immediately. Under static batching, new requests wait until the whole batch has finished. A client that disconnects
+frees its slot at the next step.
+
+The model is `stories260K`, a real but tiny LLM through llama.cpp on the CPU, with 8 slots and 4 threads. Requests arrive
+randomly, with a mix of mostly short and some long answers. Median of 3 runs, 120 requests each, times in ms.
+
+| Requests/s | Batching | Tokens/s | First token p50 | First token p99 | Total p50 | Total p99 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 20 | Continuous | 546 | 1.5 | 3.6 | 6.0 | 46.9 |
+| 20 | Static | 543 | 1.5 | 35.2 | 7.2 | 48.4 |
+| 60 | Continuous | 1,466 | 0.9 | 1.5 | 4.5 | 37.5 |
+| 60 | Static | 1,497 | 1.1 | 37.3 | 6.2 | 42.8 |
+| 120 | Continuous | 2,740 | 0.9 | 1.3 | 4.3 | 42.1 |
+| 120 | Static | 2,696 | 1.9 | 29.3 | 8.1 | 50.4 |
+| 240 | Continuous | 5,355 | 0.8 | 1.4 | 4.4 | 44.8 |
+| 240 | Static | 5,401 | 9.2 | 43.5 | 18.7 | 54.3 |
+
+**At 240 requests/s, continuous batching's first-token p99 is about 30× better (1.4 against 43.5 ms), with the same
+throughput.** This shows how the scheduling behaves. A model this small takes well under a millisecond per step, and a
+larger one's steps would take far longer, so absolute numbers would be very different. Its sampling always picks the most
+likely token, and there is no prefix caching or per-tenant fairness.
 
 ## Phase 2: streaming
 
@@ -275,10 +329,10 @@ Single thread, 1000 keys, median of 3 runs of `bench/stream_ops_bench.cpp`.
 
 ### Exactly-once processing
 
-`tests/integration/exactly_once_test.py` kills a worker with SIGKILL 40 times at random moments, with the producer
+`tests/integration/exactly_once_test.py` kills a worker with SIGKILL 20 to 40 times at random moments, with the producer
 retrying every event from the start after each restart, and the consumer replaying from its last checkpoint.
-All 150,000 events then count exactly once across 50 keys, and every total matches. The final run alone
-recognized 64,219 retries. **This holds for process crashes and for the state in the checkpoint file.** It was
+All 150,000 events then count exactly once across 50 keys, and every total matches. With the fix below, it passed 80 of
+80 runs in a row under ASan on Linux, where it had been failing about 1 run in 8 to 30. **This holds for process crashes and for the state in the checkpoint file.** It was
 not tested against power loss, since this test uses the fsync policy that survives only a process crash.
 
 ## Phase 3: cluster
@@ -402,10 +456,14 @@ maximum of 3 under load and back to 1 when idle, with 184,461 requests in the re
 - **A connection burst took down the whole cluster.** The HTTP library's listen backlog defaulted to 5, so 32 new
   connections were refused, and one failed request removed a node immediately, even the only one. About 8% of
   requests failed. Fixed with a larger backlog, requiring two failures in a row, and panic mode.
-- **Exactly-once could lose events.** The producer snapshot named events not yet on disk, so after a crash their
-  retries looked like duplicates. Consumers could also read events a crash could still erase. The test hung when
-  this happened, which is how it surfaced. Passing once had been luck. Fixed by snapshotting only synced data, and
-  letting readers see only durable events.
+- **Exactly-once could lose events.** Consumers could read events a crash could still erase. Fixed by letting readers
+  see only durable events.
+- **Exactly-once could count events twice.** The snapshot of each producer's highest sequence was written by a function
+  that was never called, because the edit adding the call had silently not applied. Once old segments were trimmed, a
+  shard forgot what it had seen, and accepted retries as new. The first version of this fix was therefore committed
+  without working. Its unit test passed anyway, because a later event kept the sequence alive. It surfaced only as an
+  intermittent hang under ASan on Linux. Rather than raising the timeout, a watchdog and a per-restart history showed a
+  shard's highest sequence falling from 62,913 to 0. The test now fails without the fix, which was confirmed.
 - **A deadline could return the wrong status.** A read timeout could fire just before the deadline clock expired,
   which returned 503 and counted against the backend.
 
@@ -419,8 +477,8 @@ maximum of 3 under load and back to 1 when idle, with 184,461 requests in the re
   term, and the guarantee is about the term it was committed in. With the check corrected, 6,000 scenarios pass on each
   platform, and the five deliberately injected bugs are all still caught.
 
-**Unexplained:** in one sanitizer run, the exactly-once and autoscale tests timed out. They then passed 8 of 8
-repeat runs alone, and the cause was not found.
+**A lesson from this:** one sanitizer run had timed out in the exactly-once test. It passed 8 of 8 repeats on macOS, and
+was set aside as unexplained. That timeout was this bug.
 
 ### Raft replicated log
 
@@ -542,6 +600,21 @@ Items per second, handing over small integers, spinning when full or empty.
 outnumber performance cores and spin. That also supports what the engine does: it keeps the mutex queue, which also
 lets idle workers sleep. Writing the queue's test found a real bug: with capacity 1, this design cannot tell a full slot
 from a free one, so a push overwrote a value. Capacity is now at least 2.
+
+### io_uring
+
+`IP_POLLER=io_uring`, in a build with `IP_ENABLE_IO_URING`, replaces epoll in the event server. The event server's tests
+pass with it, and under ASan. In a Linux VM on this Mac, 64 connections, alternating runs:
+
+| Backend | Requests/s | p50 ms | p99 ms |
+| --- | --- | --- | --- |
+| epoll | 56,316 and 56,322 | 1.00 and 1.01 | 2.53 and 2.51 |
+| io_uring | 55,568 and 54,733 | 1.06 and 1.07 | 2.13 and 2.21 |
+
+**No throughput gain, and this was expected.** It only uses io_uring to learn which sockets are ready, and still makes a
+system call per read and write, so it skips io_uring's main benefit. Doing the I/O itself through the ring is the real
+experiment, and has not been done. Docker's default security profile also blocks io_uring, so this needed
+`--security-opt seccomp=unconfined`.
 
 ### Core pinning
 

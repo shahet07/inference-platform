@@ -8,6 +8,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(IP_ENABLE_CLANG_TIDY "Run clang-tidy on project sources during the build" OFF)
 option(IP_ENABLE_TLS "Serve HTTPS on the thread-per-connection frontend and router; needs OpenSSL 3" OFF)
+option(IP_ENABLE_IO_URING "Allow IP_POLLER=io_uring in the event server; Linux with liburing" OFF)
+option(IP_ENABLE_LLAMA "Build the real LLM backend on llama.cpp, a large dependency" OFF)
 option(IP_BUILD_FUZZ "Build libFuzzer targets; needs LLVM clang, not Apple clang" OFF)
 set(IP_SANITIZE "" CACHE STRING "Sanitizers to enable, e.g. 'address,undefined' or 'thread'")
 
@@ -33,6 +35,7 @@ add_subdirectory(runtime)
 add_subdirectory(stream)
 add_subdirectory(cluster)
 add_subdirectory(consensus)
+add_subdirectory(llm)
 add_subdirectory(server)
 add_subdirectory(bench)
 

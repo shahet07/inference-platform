@@ -77,6 +77,25 @@ endif()
 # at once. See docs/benchmarks.md.
 target_compile_definitions(httplib INTERFACE CPPHTTPLIB_LISTEN_BACKLOG=4096)
 
+if(IP_ENABLE_LLAMA)
+  set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+  set(LLAMA_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+  set(LLAMA_CURL OFF CACHE BOOL "" FORCE)
+  set(GGML_METAL OFF CACHE BOOL "" FORCE)
+  set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
+  set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+    llama_cpp
+    URL https://github.com/ggml-org/llama.cpp/archive/refs/tags/b5999.tar.gz
+    URL_HASH SHA256=9714312b2fe8d4fc3c49a497bc8cfe843385f79a5da5e3f6e56fee9d8c56ab5c
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE
+    SYSTEM
+  )
+  FetchContent_MakeAvailable(llama_cpp)
+endif()
+
 add_library(eigen_headers INTERFACE)
 target_include_directories(eigen_headers SYSTEM INTERFACE ${eigen_SOURCE_DIR})
 

@@ -12,7 +12,14 @@ namespace runtime {
 // Failures to load or run the model throw std::runtime_error.
 class OnnxModel {
  public:
-  explicit OnnxModel(const std::filesystem::path& model_path);
+  enum class Provider : std::uint8_t {
+    kCpu,
+    // Apple's Core ML, which can use the GPU and Neural Engine. Throws on other platforms.
+    // Operations it cannot run fall back to the CPU, without any error.
+    kCoreMl,
+  };
+
+  explicit OnnxModel(const std::filesystem::path& model_path, Provider provider = Provider::kCpu);
   ~OnnxModel();
 
   OnnxModel(const OnnxModel&) = delete;

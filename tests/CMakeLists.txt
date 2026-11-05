@@ -123,3 +123,12 @@ if(IP_ENABLE_TLS)
       ${CMAKE_SOURCE_DIR}/bench/models/mlp_quant.onnx 19870)
   set_tests_properties(integration.tls PROPERTIES TIMEOUT 120)
 endif()
+
+add_executable(llm_tests llm/scheduler_test.cpp)
+target_link_libraries(llm_tests PRIVATE llm GTest::gtest_main GTest::gmock)
+gtest_discover_tests(llm_tests)
+
+add_test(NAME integration.llm_streaming
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/llm_streaming_test.py
+    $<TARGET_FILE:llm_server> 19890)
+set_tests_properties(integration.llm_streaming PROPERTIES TIMEOUT 120)

@@ -7,3 +7,6 @@ bench/models/mlp_xl_quant.onnx
 crash-*
 bench/models/mobilenetv2-12-int8.onnx
 __pycache__/
+bench/models/mobilenetv2-12.onnx
+bench/models/mobilenetv2-static-*.onnx
+bench/models/stories260K.gguf

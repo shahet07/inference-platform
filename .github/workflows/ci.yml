@@ -31,6 +31,17 @@ jobs:
       - run: cmake --build --preset tls
       - run: ctest --preset tls --timeout 180 -R 'integration.tls|integration.security|Router|HttpServer'
 
+  io_uring:
+    runs-on: ubuntu-24.04
+    env:
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build liburing-dev
+      - run: cmake --preset release -DIP_ENABLE_IO_URING=ON
+      - run: cmake --build --preset release --target net_tests
+      - run: IP_POLLER=io_uring ./build/release/tests/net_tests
+
   macos:
     runs-on: macos-15
     steps:

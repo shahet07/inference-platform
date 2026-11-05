@@ -302,13 +302,9 @@ TEST_F(EventServerTest, ConnectionsOverTheLimitAreClosed) {
   EXPECT_TRUE(over.closedByServer());
 }
 
-TEST(PollerTest, ReportsTheBackendName) {
-  const auto poller = net::makePoller();
-#ifdef __APPLE__
-  EXPECT_STREQ(poller->name(), "kqueue");
-#else
-  EXPECT_STREQ(poller->name(), "epoll");
-#endif
+TEST(PollerTest, ReportsARealBackendName) {
+  const std::string name = net::makePoller()->name();
+  EXPECT_TRUE(name == "kqueue" || name == "epoll" || name == "io_uring") << name;
 }
 
 }  // namespace

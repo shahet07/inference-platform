@@ -49,8 +49,9 @@ std::size_t sizeFlag(const std::map<std::string, std::string>& flags, const std:
   return it == flags.end() ? fallback : std::stoul(it->second);
 }
 
-server::LoadedBackend loadOnnx(const std::filesystem::path& path) {
-  auto model = std::make_shared<runtime::OnnxModel>(path);
+server::LoadedBackend loadOnnx(const std::filesystem::path& path,
+                               runtime::OnnxModel::Provider provider) {
+  auto model = std::make_shared<runtime::OnnxModel>(path, provider);
   server::LoadedBackend backend;
   backend.row_shape = model->inputRowShape();
   backend.run = [model = model.get()](std::span<const float> input,
@@ -74,7 +75,8 @@ int main(int argc, char** argv) {
              "  [--tcp-nodelay 0|1] [--keep-alive-max N] [--events 0|1] [--window-ms N]\n"
              "  [--events-dir DIR] [--events-fsync always|interval|never] [--events-archive DIR]\n"
              "  [--api-keys FILE] [--tls-cert PEM --tls-key PEM] [--peer-key KEY]\n"
-             "  [--frontend httplib|event] [--event-threads N] [--pin-workers 0|1] [--model-dir "
+             "  [--provider cpu|coreml] [--frontend httplib|event] [--event-threads N] "
+             "[--pin-workers 0|1] [--model-dir "
              "DIR] [--model-poll-ms N] [--arena 0|1] "
              "[--trace-file PATH] "
              "[--trace-sample N] [--node-id ID] [--peers "
@@ -120,7 +122,12 @@ int main(int argc, char** argv) {
     };
     // Declared before the manager, whose thread reads it, so that it is destroyed after.
     cluster::ModelRegistry models(node_id);
-    server::ModelManager manager(loadOnnx, config, registry, &logger);
+    const auto provider = flags.contains("provider") && flags.at("provider") == "coreml"
+                              ? runtime::OnnxModel::Provider::kCoreMl
+                              : runtime::OnnxModel::Provider::kCpu;
+    server::ModelManager manager(
+        [provider](const std::filesystem::path& path) { return loadOnnx(path, provider); }, config,
+        registry, &logger);
     manager.load("default", flags.at("model"), 0);
 
     server::HttpServer http(manager, registry, sizeFlag(flags, "connections", 256),

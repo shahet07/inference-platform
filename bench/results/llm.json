@@ -1,0 +1,82 @@
+[
+  {
+    "policy": "continuous",
+    "offered_requests_per_sec": 20,
+    "tokens_per_sec": 545.7004311997491,
+    "ttft_p50_ms": 1.4600753784179688,
+    "ttft_p99_ms": 3.5669803619384766,
+    "total_p50_ms": 5.999088287353516,
+    "total_p99_ms": 46.922922134399414,
+    "failed": 0
+  },
+  {
+    "policy": "static",
+    "offered_requests_per_sec": 20,
+    "tokens_per_sec": 542.9251619085884,
+    "ttft_p50_ms": 1.4691352844238281,
+    "ttft_p99_ms": 35.24613380432129,
+    "total_p50_ms": 7.182121276855469,
+    "total_p99_ms": 48.400163650512695,
+    "failed": 0
+  },
+  {
+    "policy": "continuous",
+    "offered_requests_per_sec": 60,
+    "tokens_per_sec": 1466.2968381147302,
+    "ttft_p50_ms": 0.9400844573974609,
+    "ttft_p99_ms": 1.4791488647460938,
+    "total_p50_ms": 4.50587272644043,
+    "total_p99_ms": 37.54782676696777,
+    "failed": 0
+  },
+  {
+    "policy": "static",
+    "offered_requests_per_sec": 60,
+    "tokens_per_sec": 1496.6538640581225,
+    "ttft_p50_ms": 1.1141300201416016,
+    "ttft_p99_ms": 37.32490539550781,
+    "total_p50_ms": 6.150722503662109,
+    "total_p99_ms": 42.77396202087402,
+    "failed": 0
+  },
+  {
+    "policy": "continuous",
+    "offered_requests_per_sec": 120,
+    "tokens_per_sec": 2740.239494183243,
+    "ttft_p50_ms": 0.858306884765625,
+    "ttft_p99_ms": 1.2500286102294922,
+    "total_p50_ms": 4.303932189941406,
+    "total_p99_ms": 42.07897186279297,
+    "failed": 0
+  },
+  {
+    "policy": "static",
+    "offered_requests_per_sec": 120,
+    "tokens_per_sec": 2696.0165973662038,
+    "ttft_p50_ms": 1.909017562866211,
+    "ttft_p99_ms": 29.28900718688965,
+    "total_p50_ms": 8.054018020629883,
+    "total_p99_ms": 50.36187171936035,
+    "failed": 0
+  },
+  {
+    "policy": "continuous",
+    "offered_requests_per_sec": 240,
+    "tokens_per_sec": 5355.042961297605,
+    "ttft_p50_ms": 0.8370876312255859,
+    "ttft_p99_ms": 1.4219284057617188,
+    "total_p50_ms": 4.36091423034668,
+    "total_p99_ms": 44.77214813232422,
+    "failed": 0
+  },
+  {
+    "policy": "static",
+    "offered_requests_per_sec": 240,
+    "tokens_per_sec": 5400.892979183726,
+    "ttft_p50_ms": 9.15980339050293,
+    "ttft_p99_ms": 43.51806640625,
+    "total_p50_ms": 18.731117248535156,
+    "total_p99_ms": 54.31222915649414,
+    "failed": 0
+  }
+]

@@ -1,0 +1,68 @@
+{
+  "model_only": [
+    {
+      "provider": "cpu",
+      "batch": 1,
+      "images_per_sec": 75.45361119638794
+    },
+    {
+      "provider": "coreml",
+      "batch": 1,
+      "images_per_sec": 1682.3654694487395
+    },
+    {
+      "provider": "cpu",
+      "batch": 8,
+      "images_per_sec": 74.6040756990294
+    },
+    {
+      "provider": "coreml",
+      "batch": 8,
+      "images_per_sec": 1340.6928341315509
+    },
+    {
+      "provider": "cpu",
+      "batch": 32,
+      "images_per_sec": 74.3034552905086
+    },
+    {
+      "provider": "coreml",
+      "batch": 32,
+      "images_per_sec": 1428.077872779589
+    }
+  ],
+  "server": [
+    {
+      "provider": "cpu",
+      "workers": 1,
+      "rps": 75.4,
+      "p50_ms": 211.012417,
+      "p99_ms": 224.33675,
+      "errors": 0
+    },
+    {
+      "provider": "cpu",
+      "workers": 4,
+      "rps": 292.8,
+      "p50_ms": 53.71075,
+      "p99_ms": 62.267791,
+      "errors": 0
+    },
+    {
+      "provider": "coreml",
+      "workers": 1,
+      "rps": 583.6,
+      "p50_ms": 28.259916,
+      "p99_ms": 33.731375,
+      "errors": 0
+    },
+    {
+      "provider": "coreml",
+      "workers": 4,
+      "rps": 667.6,
+      "p50_ms": 23.872292,
+      "p99_ms": 28.947834,
+      "errors": 0
+    }
+  ]
+}

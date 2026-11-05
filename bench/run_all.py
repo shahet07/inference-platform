@@ -19,6 +19,7 @@ SCRIPTS = [
     "run_cluster_bottleneck.py",
     "run_balance_bench.py",
     "run_raft_bench.py",
+    "run_llm_bench.py",
     "run_hardware_contention.py",
     "run_wal_bench.py",
     "run_real_model_bench.py",
@@ -29,7 +30,7 @@ SCRIPTS = [
     "run_auth_overhead.py",
 ]
 if sys.platform == "darwin":
-    SCRIPTS.append("run_profiles.py")
+    SCRIPTS += ["run_coreml_bench.py", "run_profiles.py"]
 
 for script in SCRIPTS:
     started = time.time()

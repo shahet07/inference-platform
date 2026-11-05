@@ -1,6 +1,9 @@
 #include "runtime/onnx_model.h"
 
 #include <onnxruntime_cxx_api.h>
+#ifdef __APPLE__
+#include <coreml_provider_factory.h>
+#endif
 
 #include <array>
 #include <cstddef>
@@ -12,8 +15,15 @@
 namespace runtime {
 namespace {
 
-Ort::SessionOptions makeSessionOptions() {
+Ort::SessionOptions makeSessionOptions(OnnxModel::Provider provider) {
   Ort::SessionOptions options;
+  if (provider == OnnxModel::Provider::kCoreMl) {
+#ifdef __APPLE__
+    Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_CoreML(options, 0));
+#else
+    throw std::runtime_error("Core ML is only available on Apple platforms");
+#endif
+  }
   // One thread per inference: concurrency will come from the server's own thread pool,
   // and an ONNX Runtime pool on top of it would oversubscribe the cores.
   options.SetIntraOpNumThreads(1);
@@ -40,9 +50,9 @@ void validateShape(std::span<const std::int64_t> shape, std::size_t element_coun
 }  // namespace
 
 struct OnnxModel::Impl {
-  explicit Impl(const std::filesystem::path& model_path)
+  Impl(const std::filesystem::path& model_path, Provider provider)
       : env(ORT_LOGGING_LEVEL_WARNING, "runtime"),
-        session(env, model_path.c_str(), makeSessionOptions()) {
+        session(env, model_path.c_str(), makeSessionOptions(provider)) {
     if (session.GetInputCount() != 1 || session.GetOutputCount() != 1) {
       throw std::runtime_error("expected a model with one input and one output: " +
                                model_path.string());
@@ -58,9 +68,9 @@ struct OnnxModel::Impl {
   std::string output_name;
 };
 
-OnnxModel::OnnxModel(const std::filesystem::path& model_path) {
+OnnxModel::OnnxModel(const std::filesystem::path& model_path, Provider provider) {
   try {
-    impl_ = std::make_unique<Impl>(model_path);
+    impl_ = std::make_unique<Impl>(model_path, provider);
   } catch (const Ort::Exception& e) {
     throw std::runtime_error("failed to load " + model_path.string() + ": " + e.what());
   }

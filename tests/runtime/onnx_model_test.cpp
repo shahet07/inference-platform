@@ -26,6 +26,20 @@ TEST(OnnxModelTest, RunsInferenceOnLinearModel) {
   EXPECT_THAT(output, testing::ElementsAre(3.0F, 5.0F, 7.0F));
 }
 
+#ifdef __APPLE__
+TEST(OnnxModelTest, CoreMlGivesTheSameAnswers) {
+  const runtime::OnnxModel model(linearModelPath(), runtime::OnnxModel::Provider::kCoreMl);
+  const std::array<float, 3> input{1.0F, 2.0F, 3.0F};
+  const std::array<std::int64_t, 2> shape{3, 1};
+  EXPECT_THAT(model.run(input, shape), testing::ElementsAre(3.0F, 5.0F, 7.0F));
+}
+#else
+TEST(OnnxModelTest, CoreMlIsRefusedElsewhere) {
+  EXPECT_THROW(runtime::OnnxModel(linearModelPath(), runtime::OnnxModel::Provider::kCoreMl),
+               std::runtime_error);
+}
+#endif
+
 TEST(OnnxModelTest, ThrowsWhenModelFileIsMissing) {
   EXPECT_THROW(runtime::OnnxModel("does_not_exist.onnx"), std::runtime_error);
 }
