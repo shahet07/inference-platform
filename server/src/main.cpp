@@ -11,6 +11,7 @@
 #include <memory>
 #include <span>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <utility>
@@ -23,6 +24,7 @@
 #include "obs/startup.h"
 #include "obs/trace.h"
 #include "runtime/onnx_model.h"
+#include "security/api_keys.h"
 #include "server/batching_engine.h"
 #include "server/event_frontend.h"
 #include "server/http_server.h"
@@ -71,6 +73,7 @@ int main(int argc, char** argv) {
              "  [--max-batch N] [--max-wait-us N] [--queue N] [--connections N]\n"
              "  [--tcp-nodelay 0|1] [--keep-alive-max N] [--events 0|1] [--window-ms N]\n"
              "  [--events-dir DIR] [--events-fsync always|interval|never] [--events-archive DIR]\n"
+             "  [--api-keys FILE] [--tls-cert PEM --tls-key PEM] [--peer-key KEY]\n"
              "  [--frontend httplib|event] [--event-threads N] [--pin-workers 0|1] [--model-dir "
              "DIR] [--model-poll-ms N] [--arena 0|1] "
              "[--trace-file PATH] "
@@ -122,7 +125,15 @@ int main(int argc, char** argv) {
 
     server::HttpServer http(manager, registry, sizeFlag(flags, "connections", 256),
                             sizeFlag(flags, "tcp-nodelay", 1) != 0,
-                            sizeFlag(flags, "keep-alive-max", 1000000));
+                            sizeFlag(flags, "keep-alive-max", 1000000),
+                            flags.contains("tls-cert") ? flags.at("tls-cert") : "",
+                            flags.contains("tls-key") ? flags.at("tls-key") : "");
+    std::unique_ptr<security::ApiKeys> api_keys;
+    if (flags.contains("api-keys")) {
+      api_keys = std::make_unique<security::ApiKeys>(std::filesystem::path(flags.at("api-keys")));
+      http.attachApiKeys(*api_keys);
+      logger.info("API keys required", {{"keys", static_cast<std::int64_t>(api_keys->size())}});
+    }
 
     // On by default. Requests are recorded on a drop-newest log, so a slow consumer loses
     // analytics events rather than delaying inference.
@@ -178,7 +189,8 @@ int main(int argc, char** argv) {
     std::unique_ptr<cluster::Replicator> replicator;
     if (!peers.empty()) {
       replicator = std::make_unique<cluster::Replicator>(
-          models, peers, cluster::Replicator::httpFetch(),
+          models, peers,
+          cluster::Replicator::httpFetch(flags.contains("peer-key") ? flags.at("peer-key") : ""),
           std::chrono::milliseconds(sizeFlag(flags, "replication-interval-ms", 1000)));
     }
 
@@ -187,8 +199,15 @@ int main(int argc, char** argv) {
     // model management endpoints, so those flags have no effect with it.
     std::unique_ptr<server::EventFrontend> frontend;
     if (flags.contains("frontend") && flags.at("frontend") == "event") {
+      if (flags.contains("tls-cert")) {
+        // Refusing is better than quietly serving plain text to someone who asked for TLS.
+        throw std::runtime_error("the event frontend does not support TLS");
+      }
       frontend = std::make_unique<server::EventFrontend>(manager, registry,
                                                          sizeFlag(flags, "event-threads", 2));
+      if (api_keys) {
+        frontend->attachApiKeys(*api_keys);
+      }
     }
     const int requested_port = static_cast<int>(sizeFlag(flags, "port", 8080));
     const int port =

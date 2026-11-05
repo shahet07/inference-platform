@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -19,6 +20,7 @@
 #include "obs/metrics.h"
 #include "obs/startup.h"
 #include "obs/trace.h"
+#include "security/api_keys.h"
 
 int main(int argc, char** argv) {
   try {
@@ -32,7 +34,8 @@ int main(int argc, char** argv) {
       std::cerr
           << "usage: inference_router --backends host:port,host:port [--host H] [--port P]\n"
              "  [--balance hash|least-loaded] [--backend-timeout-ms N] [--health-interval-ms N]\n"
-             "  [--discover-dns name:port]\n"
+             "  [--discover-dns name:port] [--api-keys FILE] [--tls-cert PEM --tls-key PEM]\n"
+             "  [--backend-ca PEM]\n"
              "  [--trace-file PATH] [--trace-sample N]\n";
       return EXIT_FAILURE;
     }
@@ -63,6 +66,18 @@ int main(int argc, char** argv) {
     }
     if (flags.contains("health-interval-ms")) {
       config.health.interval = std::chrono::milliseconds(std::stoll(flags["health-interval-ms"]));
+    }
+    if (flags.contains("tls-cert")) {
+      config.tls_cert = flags["tls-cert"];
+      config.tls_key = flags["tls-key"];
+    }
+    if (flags.contains("backend-ca")) {
+      config.backend_ca = flags["backend-ca"];
+    }
+    std::unique_ptr<security::ApiKeys> api_keys;
+    if (flags.contains("api-keys")) {
+      api_keys = std::make_unique<security::ApiKeys>(std::filesystem::path(flags["api-keys"]));
+      config.api_keys = api_keys.get();
     }
     obs::Logger logger(std::cerr, "router");
     config.logger = &logger;

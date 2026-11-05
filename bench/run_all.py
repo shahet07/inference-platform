@@ -26,6 +26,7 @@ SCRIPTS = [
     "run_arena_ab.py",
     "run_queue_bench.py",
     "run_tracing_overhead.py",
+    "run_auth_overhead.py",
 ]
 if sys.platform == "darwin":
     SCRIPTS.append("run_profiles.py")

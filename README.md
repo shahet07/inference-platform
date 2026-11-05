@@ -34,6 +34,7 @@ model. [Read the caveats](docs/benchmarks.md#read-this-first) before quoting the
 | `consensus/` | Raft: leader election and a replicated log |
 | `perf/` | Arena allocator, SIMD kernels |
 | `obs/` | Metrics, structured logs, tracing |
+| `security/` | API keys, roles, rate limits |
 | `bench/` | Load generator, benchmarks, results |
 | `ops/` | Prometheus and Grafana setup, demo cluster |
 | `tests/` | Unit and end-to-end tests |
@@ -86,6 +87,15 @@ curl -X PUT localhost:8080/v1/models/resnet -d '{"uri":"resnet-v2.onnx"}'
 curl -s localhost:8080/v1/loaded
 ```
 
+To require API keys and serve HTTPS (TLS needs `cmake --preset tls`, with OpenSSL 3):
+
+```sh
+python3 tools/make_api_key.py alice client 100 200 >alice.key 2>>api_keys.txt
+python3 tools/make_api_key.py ops admin >ops.key 2>>api_keys.txt
+./build/tls/server/inference_server --model bench/models/mlp_quant.onnx --api-keys api_keys.txt \
+  --tls-cert server.pem --tls-key server.key
+```
+
 Add `--frontend event` for the event-driven server, which handles many more connections per thread, but only serves
 inference and metrics.
 
@@ -134,6 +144,11 @@ Check `curl -s localhost:8080/v1/loaded`, `model_load_failures_total`, and the l
 `refused model uri`. The previous model keeps serving after a failure. A failed version is not retried, so
 fix the file and `PUT` again to make a new version.
 
+### Requests return 401, 403, or 429
+
+401 means the `Authorization: Bearer` key is missing or unknown. 403 means the key needs the admin role for this. 429
+means the key is over its rate limit, set in the key file: wait for `Retry-After`, or raise the limit and restart.
+
 ### Requests return 504
 
 The request's `X-Deadline-Ms` passed. If this is new, check `inference_queue_wait_seconds` and
@@ -169,7 +184,7 @@ drained. The event log survives the restart only if `--events-dir` is set.
 
 ## Limitations
 
-No TLS or authentication. All
+Security is opt-in, and Raft traffic is not authenticated. All
 benchmarks ran on one machine. See [design notes](docs/design.md#known-gaps).
 
 ## License

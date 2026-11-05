@@ -81,7 +81,33 @@ struct EventFrontend::Impl {
                  handle(request, responder);
                }) {}
 
+  // Returns false if a response has been sent.
+  [[nodiscard]] bool authorize(const net::HttpRequest& request,
+                               const net::Responder& responder) const {
+    if (api_keys == nullptr || request.path == "/healthz") {
+      return true;
+    }
+    switch (api_keys->check(request.header("Authorization"), security::Role::kClient)) {
+      case security::AuthResult::kAllowed:
+        return true;
+      case security::AuthResult::kUnauthenticated:
+        responder.respond(401, kJson, R"({"error":"a valid API key is required"})",
+                          {{"WWW-Authenticate", "Bearer"}});
+        return false;
+      case security::AuthResult::kForbidden:
+        sendError(responder, 403, "this key cannot do that");
+        return false;
+      case security::AuthResult::kRateLimited:
+        responder.respond(429, kJson, R"({"error":"rate limit exceeded"})", {{"Retry-After", "1"}});
+        return false;
+    }
+    return false;
+  }
+
   void handle(const net::HttpRequest& request, const net::Responder& responder) {
+    if (!authorize(request, responder)) {
+      return;
+    }
     if (request.method == "GET") {
       if (request.path == "/healthz") {
         responder.respond(200, "text/plain", "ok\n");
@@ -169,6 +195,7 @@ struct EventFrontend::Impl {
     request_seconds.observe(std::chrono::duration<double>(Clock::now() - started).count());
   }
 
+  security::ApiKeys* api_keys = nullptr;
   ModelManager& manager;
   obs::Registry& registry;
   obs::Histogram& request_seconds;
@@ -179,6 +206,8 @@ EventFrontend::EventFrontend(ModelManager& models, obs::Registry& registry, std:
     : impl_(std::make_unique<Impl>(models, registry, threads)) {}
 
 EventFrontend::~EventFrontend() = default;
+
+void EventFrontend::attachApiKeys(security::ApiKeys& keys) { impl_->api_keys = &keys; }
 
 int EventFrontend::bind(const std::string& host, int port) {
   try {

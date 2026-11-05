@@ -67,6 +67,12 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(googletest onnxruntime httplib nlohmann_json eigen)
 
+if(IP_ENABLE_TLS)
+  find_package(OpenSSL 3 REQUIRED)
+  target_compile_definitions(httplib INTERFACE CPPHTTPLIB_OPENSSL_SUPPORT)
+  target_link_libraries(httplib INTERFACE OpenSSL::SSL OpenSSL::Crypto)
+endif()
+
 # The library's default of 5 refuses connections during a burst, such as a load balancer opening many
 # at once. See docs/benchmarks.md.
 target_compile_definitions(httplib INTERFACE CPPHTTPLIB_LISTEN_BACKLOG=4096)

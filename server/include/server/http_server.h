@@ -8,6 +8,7 @@
 #include "obs/log.h"
 #include "obs/metrics.h"
 #include "obs/trace.h"
+#include "security/api_keys.h"
 #include "server/batching_engine.h"
 #include "server/model_manager.h"
 #include "stream/processor.h"
@@ -31,12 +32,15 @@ namespace server {
 class HttpServer {
  public:
   // `connection_threads` caps concurrent connections, since each one holds a thread.
-  // `tcp_nodelay` stops headers and body, which are written separately, from stalling on Nagle's
-  // algorithm and delayed ACKs. `keep_alive_max_requests` is how many requests a connection
-  // serves before it is closed; the library default of 100 forces frequent reconnects. See
-  // docs/benchmarks.md for measurements of both.
+  // With `tls_cert` and `tls_key` paths, this serves HTTPS. That needs a build with IP_ENABLE_TLS,
+  // and throws otherwise, or if the files cannot be used. `tcp_nodelay` stops headers and body,
+  // which are written separately, from stalling on Nagle's algorithm and delayed ACKs.
+  // `keep_alive_max_requests` is how many requests a connection serves before it is closed; the
+  // library default of 100 forces frequent reconnects. See docs/benchmarks.md for measurements of
+  // both.
   HttpServer(ModelManager& models, obs::Registry& registry, std::size_t connection_threads,
-             bool tcp_nodelay = true, std::size_t keep_alive_max_requests = 1'000'000);
+             bool tcp_nodelay = true, std::size_t keep_alive_max_requests = 1'000'000,
+             const std::string& tls_cert = "", const std::string& tls_key = "");
   ~HttpServer();
 
   HttpServer(const HttpServer&) = delete;
@@ -56,6 +60,10 @@ class HttpServer {
   void attachLogger(obs::Logger& logger);
   // Records a span per sampled request and passes the trace to the engine. Must outlive the server.
   void attachTracer(obs::Tracer& tracer);
+
+  // Requires an API key on everything except /healthz, and the admin role to change models. `keys`
+  // must outlive the server. Call before serve().
+  void attachApiKeys(security::ApiKeys& keys);
 
   // Binds to `port`, or to any free port if it is 0. Returns the bound port, or -1 on failure.
   int bind(const std::string& host, int port);

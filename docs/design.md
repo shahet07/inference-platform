@@ -203,6 +203,25 @@ Tracing must never be able to slow a request.
 **Spans are written as JSON lines.** `tools/trace_view.py` merges them across services. This avoids an
 exporter dependency, but it means no Jaeger-style UI without adding one.
 
+## Security
+
+**API keys are stored as SHA-256 hashes.** Reading the key file does not reveal the keys, and a malformed file stops the
+server, instead of leaving it open, with an error that never echoes the file's contents, in case someone pasted a raw
+key. Keys are random and long, which is why a fast hash is fine here, where a password would need a slow one.
+
+**Comparison takes the same time wherever it fails.** Hashes are compared in constant time, against every entry.
+
+**Two roles.** Running a model needs a client key. Changing what is served needs an admin key. Before this, anyone who
+could reach the port could replace a model. `/healthz` stays open, for load balancers and health checks, and `/metrics`
+requires a key.
+
+**Rate limits are token buckets per key.** They allow short bursts, and hold the long-run average. A request over the
+limit gets 429 with `Retry-After`.
+
+**TLS is a build option**, because it brings in OpenSSL. A router can verify backends against a CA, and refuses one it
+cannot verify. The event frontend does not support TLS, and refuses to start if asked, instead of quietly serving plain
+text. Certificates are read at startup, so rotating them means a restart. Client certificates are not supported.
+
 ## Consensus
 
 **Raft is a deterministic state machine with no threads, clock, or network.** Time and messages are passed in, which
@@ -225,7 +244,9 @@ a router found two nodes through a shared DNS name, served requests from both, a
 
 ## Known gaps
 
-- No TLS or authentication. Everything binds to localhost by default and assumes a trusted network.
+- Security is opt-in: without `--api-keys` and TLS flags, anyone who can reach a port has full access. Everything binds
+  to localhost by default. Peer replication and Raft traffic are not encrypted, and Raft has no authentication.
+- The directory-backed segment store is the only tiered storage backend. There is no real S3 client.
 - The event log persists to one machine's disk. The Raft log is replicated, but is a separate service with no
   compaction or membership changes, and the two are not connected.
 - All cluster benchmarks ran on one machine, so they show this machine's limits and not those of a

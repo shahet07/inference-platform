@@ -31,8 +31,8 @@ class Replicator {
   Replicator(Replicator&&) = delete;
   Replicator& operator=(Replicator&&) = delete;
 
-  // Fetches over HTTP from "host:port".
-  [[nodiscard]] static Fetch httpFetch();
+  // Fetches over HTTP from "host:port", sending `api_key` when peers require one.
+  [[nodiscard]] static Fetch httpFetch(const std::string& api_key = "");
 
  private:
   void run();

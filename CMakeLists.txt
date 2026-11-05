@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(IP_ENABLE_CLANG_TIDY "Run clang-tidy on project sources during the build" OFF)
+option(IP_ENABLE_TLS "Serve HTTPS on the thread-per-connection frontend and router; needs OpenSSL 3" OFF)
 option(IP_BUILD_FUZZ "Build libFuzzer targets; needs LLVM clang, not Apple clang" OFF)
 set(IP_SANITIZE "" CACHE STRING "Sanitizers to enable, e.g. 'address,undefined' or 'thread'")
 
@@ -25,6 +26,7 @@ if(IP_ENABLE_CLANG_TIDY)
 endif()
 
 add_subdirectory(obs)
+add_subdirectory(security)
 add_subdirectory(net)
 add_subdirectory(perf)
 add_subdirectory(runtime)

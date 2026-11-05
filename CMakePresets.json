@@ -28,6 +28,11 @@
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "IP_SANITIZE": "thread" }
     },
     {
+      "name": "tls",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "IP_ENABLE_TLS": "ON" }
+    },
+    {
       "name": "fuzz",
       "inherits": "base",
       "cacheVariables": {
@@ -42,12 +47,14 @@
     { "name": "release", "configurePreset": "release" },
     { "name": "asan", "configurePreset": "asan" },
     { "name": "tsan", "configurePreset": "tsan" },
+    { "name": "tls", "configurePreset": "tls" },
     { "name": "fuzz", "configurePreset": "fuzz" }
   ],
   "testPresets": [
     { "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },
     { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
     { "name": "asan", "configurePreset": "asan", "output": { "outputOnFailure": true } },
-    { "name": "tsan", "configurePreset": "tsan", "output": { "outputOnFailure": true } }
+    { "name": "tsan", "configurePreset": "tsan", "output": { "outputOnFailure": true } },
+    { "name": "tls", "configurePreset": "tls", "output": { "outputOnFailure": true } }
   ]
 }

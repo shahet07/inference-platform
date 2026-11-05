@@ -105,3 +105,21 @@ add_test(NAME integration.event_frontend
     $<TARGET_FILE:inference_server> $<TARGET_FILE:load_gen>
     ${CMAKE_SOURCE_DIR}/bench/models/mlp_quant.onnx 19800)
 set_tests_properties(integration.event_frontend PROPERTIES TIMEOUT 120)
+
+add_executable(security_tests security/api_keys_test.cpp)
+target_link_libraries(security_tests PRIVATE security GTest::gtest_main)
+gtest_discover_tests(security_tests)
+
+add_test(NAME integration.security
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/security_test.py
+    $<TARGET_FILE:inference_server> $<TARGET_FILE:inference_router>
+    ${CMAKE_SOURCE_DIR}/bench/models/mlp_quant.onnx 19850)
+set_tests_properties(integration.security PROPERTIES TIMEOUT 120)
+
+if(IP_ENABLE_TLS)
+  add_test(NAME integration.tls
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/tls_test.py
+      $<TARGET_FILE:inference_server> $<TARGET_FILE:inference_router>
+      ${CMAKE_SOURCE_DIR}/bench/models/mlp_quant.onnx 19870)
+  set_tests_properties(integration.tls PROPERTIES TIMEOUT 120)
+endif()

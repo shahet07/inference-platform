@@ -46,11 +46,15 @@ void Replicator::pullOnce() {
   }
 }
 
-Replicator::Fetch Replicator::httpFetch() {
-  return [](const std::string& peer) -> std::optional<std::string> {
+Replicator::Fetch Replicator::httpFetch(const std::string& api_key) {
+  // NOLINTNEXTLINE(bugprone-exception-escape): failures to reach a peer come back as nullopt.
+  return [api_key](const std::string& peer) -> std::optional<std::string> {
     httplib::Client client("http://" + peer);
     client.set_connection_timeout(std::chrono::milliseconds(200));
     client.set_read_timeout(std::chrono::seconds(1));
+    if (!api_key.empty()) {
+      client.set_bearer_token_auth(api_key);
+    }
     const auto response = client.Get("/v1/models");
     if (!response || response->status != 200) {
       return std::nullopt;

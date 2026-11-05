@@ -537,6 +537,7 @@ class RaftChaosTest : public testing::TestWithParam<int> {};
 
 TEST_P(RaftChaosTest, StaysSafeAndRecoversAcrossSeeds) {
   // RAFT_CHAOS_SEEDS runs more of them, for an occasional deep check.
+  // NOLINTNEXTLINE(concurrency-mt-unsafe): nothing sets the environment while this runs.
   const char* configured = std::getenv("RAFT_CHAOS_SEEDS");
   const std::uint64_t seeds = configured != nullptr ? std::strtoull(configured, nullptr, 10) : 300;
   for (std::uint64_t seed = 1; seed <= seeds; ++seed) {

@@ -11,6 +11,7 @@
 #include "obs/log.h"
 #include "obs/metrics.h"
 #include "obs/trace.h"
+#include "security/api_keys.h"
 
 namespace cluster {
 
@@ -39,7 +40,15 @@ struct RouterConfig {
   // Nodes tried for one request. Inference has no side effects, so retrying is safe.
   std::size_t max_attempts = 2;
   HealthConfig health;
-  // Optional, and must outlive the router.
+  // Serve HTTPS, which needs a build with IP_ENABLE_TLS. Throws otherwise.
+  std::string tls_cert;
+  std::string tls_key;
+  // Talk to backends over HTTPS, checking their certificates against this CA file.
+  std::string backend_ca;
+  // Optional, and must outlive the router. With keys, requests need a valid key, and adding or
+  // removing backends needs an admin one. The Authorization header is forwarded, so backends can
+  // check it too.
+  security::ApiKeys* api_keys = nullptr;
   obs::Logger* logger = nullptr;
   obs::Tracer* tracer = nullptr;
 };

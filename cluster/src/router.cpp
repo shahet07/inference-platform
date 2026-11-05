@@ -38,9 +38,40 @@ using LogFields = std::initializer_list<obs::LogField>;
 
 // Reuses keep-alive connections. An httplib::Client serializes its own requests, so each
 // in-flight request takes a client of its own.
+std::unique_ptr<httplib::Server> makeHttpServer(const std::string& cert, const std::string& key) {
+  if (cert.empty() && key.empty()) {
+    return std::make_unique<httplib::Server>();
+  }
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+  auto server = std::make_unique<httplib::SSLServer>(cert.c_str(), key.c_str());
+  if (!server->is_valid()) {
+    throw std::runtime_error("cannot use TLS certificate or key");
+  }
+  return server;
+#else
+  throw std::runtime_error("TLS requested, but this build has no TLS support (IP_ENABLE_TLS)");
+#endif
+}
+
+std::unique_ptr<httplib::Client> makeClient(const std::string& backend, const std::string& ca) {
+  if (ca.empty()) {
+    return std::make_unique<httplib::Client>("http://" + backend);
+  }
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+  auto client = std::make_unique<httplib::Client>("https://" + backend);
+  client->set_ca_cert_path(ca);
+  client->enable_server_certificate_verification(true);
+  return client;
+#else
+  throw std::runtime_error(
+      "backend TLS requested, but this build has no TLS support (IP_ENABLE_TLS)");
+#endif
+}
+
 class ClientPool {
  public:
-  explicit ClientPool(std::string backend) : backend_(std::move(backend)) {}
+  ClientPool(std::string backend, std::string ca)
+      : backend_(std::move(backend)), ca_(std::move(ca)) {}
 
   std::atomic<std::int64_t> in_flight{0};
 
@@ -56,7 +87,7 @@ class ClientPool {
       }
     }
     reused = false;
-    auto client = std::make_unique<httplib::Client>("http://" + backend_);
+    auto client = makeClient(backend_, ca_);
     client->set_keep_alive(true);
     client->set_tcp_nodelay(true);
     client->set_connection_timeout(std::chrono::milliseconds(200));
@@ -76,6 +107,7 @@ class ClientPool {
 
  private:
   std::string backend_;
+  std::string ca_;
   std::mutex mutex_;
   std::vector<std::unique_ptr<httplib::Client>> idle_;
 };
@@ -102,11 +134,11 @@ std::set<std::string> resolveBackends(const std::string& name, const std::string
   return backends;
 }
 
-bool probeHealthz(const std::string& backend) {
-  httplib::Client client("http://" + backend);
-  client.set_connection_timeout(std::chrono::milliseconds(200));
-  client.set_read_timeout(std::chrono::milliseconds(500));
-  const auto response = client.Get("/healthz");
+bool probeHealthz(const std::string& backend, const std::string& ca) {
+  const auto client = makeClient(backend, ca);
+  client->set_connection_timeout(std::chrono::milliseconds(200));
+  client->set_read_timeout(std::chrono::milliseconds(500));
+  const auto response = client->Get("/healthz");
   return response && response->status == 200;
 }
 
@@ -131,7 +163,7 @@ struct Router::Impl {
                                     obs::latencyBuckets())) {
     for (const std::string& backend : c.backends) {
       ring.add(backend);
-      pools.emplace(backend, std::make_shared<ClientPool>(backend));
+      pools.emplace(backend, std::make_shared<ClientPool>(backend, config.backend_ca));
       healthy.push_back(backend);
     }
     healthy_backends.set(static_cast<std::int64_t>(c.backends.size()));
@@ -141,7 +173,8 @@ struct Router::Impl {
   void startMonitor() {
     obs::primeLocaleCaches();  // The monitor's thread is about to use the HTTP client.
     monitor = std::make_unique<HealthMonitor>(
-        config.backends, probeHealthz,
+        config.backends,
+        [ca = config.backend_ca](const std::string& backend) { return probeHealthz(backend, ca); },
         [this](const std::string& node, bool now_healthy) { onHealthChange(node, now_healthy); },
         config.health);
   }
@@ -269,7 +302,7 @@ struct Router::Impl {
       if (pools.contains(backend)) {
         return;
       }
-      pools.emplace(backend, std::make_shared<ClientPool>(backend));
+      pools.emplace(backend, std::make_shared<ClientPool>(backend, config.backend_ca));
       rebuildRotation();
     }
     monitor->addNode(backend);
@@ -308,7 +341,7 @@ struct Router::Impl {
       key = req.get_header_value("X-Client-Id");
     }
     httplib::Headers forwarded;
-    for (const char* name : {"X-Client-Id", "X-Deadline-Ms"}) {
+    for (const char* name : {"X-Client-Id", "X-Deadline-Ms", "Authorization"}) {
       if (req.has_header(name)) {
         forwarded.emplace(name, req.get_header_value(name));
       }
@@ -458,7 +491,7 @@ struct Router::Impl {
   obs::Gauge& healthy_backends;
   obs::Gauge& panic_mode;
   obs::Histogram& forward_seconds;
-  httplib::Server http;
+  std::unique_ptr<httplib::Server> http;
   std::mutex discovery_mutex;
   std::condition_variable discovery_stop;
   bool discovery_stopping = false;
@@ -469,16 +502,43 @@ struct Router::Impl {
 
 Router::Router(const RouterConfig& config, obs::Registry& registry)
     : impl_(std::make_unique<Impl>(config, registry)) {
+  impl_->http = makeHttpServer(config.tls_cert, config.tls_key);
   const std::size_t threads = config.connection_threads;
-  impl_->http.new_task_queue = [threads] { return new httplib::ThreadPool(threads); };
-  impl_->http.set_tcp_nodelay(true);
-  impl_->http.set_keep_alive_max_count(1'000'000);
+  impl_->http->new_task_queue = [threads] { return new httplib::ThreadPool(threads); };
+  impl_->http->set_tcp_nodelay(true);
+  impl_->http->set_keep_alive_max_count(1'000'000);
+  if (config.api_keys != nullptr) {
+    impl_->http->set_pre_routing_handler(
+        [this](const httplib::Request& req, httplib::Response& res) {
+          if (req.path == "/healthz") {
+            return httplib::Server::HandlerResponse::Unhandled;
+          }
+          const bool changes_backends = req.path.starts_with("/v1/backends");
+          const security::AuthResult result = impl_->config.api_keys->check(
+              req.get_header_value("Authorization"),
+              changes_backends ? security::Role::kAdmin : security::Role::kClient);
+          if (result == security::AuthResult::kAllowed) {
+            return httplib::Server::HandlerResponse::Unhandled;
+          }
+          const int status = result == security::AuthResult::kUnauthenticated ? 401
+                             : result == security::AuthResult::kForbidden     ? 403
+                                                                              : 429;
+          res.status = status;
+          if (status == 401) {
+            res.set_header("WWW-Authenticate", "Bearer");
+          } else if (status == 429) {
+            res.set_header("Retry-After", "1");
+          }
+          res.set_content(R"({"error":"not allowed"})", kJson);
+          return httplib::Server::HandlerResponse::Handled;
+        });
+  }
   const auto forward = [this](const httplib::Request& req, httplib::Response& res) {
     impl_->handleInfer(req, res);
   };
-  impl_->http.Post("/v1/infer", forward);
-  impl_->http.Post("/v1/models/:name/infer", forward);
-  impl_->http.Get("/healthz", [this](const httplib::Request&, httplib::Response& res) {
+  impl_->http->Post("/v1/infer", forward);
+  impl_->http->Post("/v1/models/:name/infer", forward);
+  impl_->http->Get("/healthz", [this](const httplib::Request&, httplib::Response& res) {
     if (impl_->healthy_backends.value() > 0) {
       res.set_content("ok\n", "text/plain");
     } else {
@@ -486,10 +546,10 @@ Router::Router(const RouterConfig& config, obs::Registry& registry)
       res.set_content("no healthy backends\n", "text/plain");
     }
   });
-  impl_->http.Get("/metrics", [this](const httplib::Request&, httplib::Response& res) {
+  impl_->http->Get("/metrics", [this](const httplib::Request&, httplib::Response& res) {
     res.set_content(impl_->registry.renderPrometheus(), "text/plain; version=0.0.4");
   });
-  impl_->http.Post("/v1/backends", [this](const httplib::Request& req, httplib::Response& res) {
+  impl_->http->Post("/v1/backends", [this](const httplib::Request& req, httplib::Response& res) {
     try {
       impl_->addBackend(nlohmann::json::parse(req.body).at("backend").get<std::string>());
       res.set_content("{}", kJson);
@@ -498,13 +558,13 @@ Router::Router(const RouterConfig& config, obs::Registry& registry)
       res.set_content(nlohmann::json{{"error", e.what()}}.dump(), kJson);
     }
   });
-  impl_->http.Delete("/v1/backends/:backend",
-                     [this](const httplib::Request& req, httplib::Response& res) {
-                       if (!impl_->removeBackend(req.path_params.at("backend"))) {
-                         res.status = 404;
-                       }
-                     });
-  impl_->http.Get("/v1/cluster", [this](const httplib::Request&, httplib::Response& res) {
+  impl_->http->Delete("/v1/backends/:backend",
+                      [this](const httplib::Request& req, httplib::Response& res) {
+                        if (!impl_->removeBackend(req.path_params.at("backend"))) {
+                          res.status = 404;
+                        }
+                      });
+  impl_->http->Get("/v1/cluster", [this](const httplib::Request&, httplib::Response& res) {
     nlohmann::json backends = nlohmann::json::array();
     for (const std::string& backend : impl_->monitor->nodes()) {
       backends.push_back({{"backend", backend}, {"healthy", impl_->monitor->isHealthy(backend)}});
@@ -519,13 +579,13 @@ Router::~Router() = default;
 
 int Router::bind(const std::string& host, int port) {
   if (port == 0) {
-    return impl_->http.bind_to_any_port(host);
+    return impl_->http->bind_to_any_port(host);
   }
-  return impl_->http.bind_to_port(host, port) ? port : -1;
+  return impl_->http->bind_to_port(host, port) ? port : -1;
 }
 
-void Router::serve() { impl_->http.listen_after_bind(); }
+void Router::serve() { impl_->http->listen_after_bind(); }
 
-void Router::stop() { impl_->http.stop(); }
+void Router::stop() { impl_->http->stop(); }
 
 }  // namespace cluster

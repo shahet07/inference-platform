@@ -5,6 +5,7 @@
 #include <string>
 
 #include "obs/metrics.h"
+#include "security/api_keys.h"
 #include "server/model_manager.h"
 
 namespace server {
@@ -23,6 +24,10 @@ class EventFrontend {
   EventFrontend& operator=(const EventFrontend&) = delete;
   EventFrontend(EventFrontend&&) = delete;
   EventFrontend& operator=(EventFrontend&&) = delete;
+
+  // Requires an API key on everything except /healthz. `keys` must outlive this. Call before
+  // serve().
+  void attachApiKeys(security::ApiKeys& keys);
 
   // Binds to `port`, or any free port if it is 0. Returns the bound port, or -1 on failure.
   int bind(const std::string& host, int port);

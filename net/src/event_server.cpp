@@ -51,12 +51,18 @@ const char* reasonPhrase(int status) {
       return "OK";
     case 400:
       return "Bad Request";
+    case 401:
+      return "Unauthorized";
+    case 403:
+      return "Forbidden";
     case 404:
       return "Not Found";
     case 405:
       return "Method Not Allowed";
     case 413:
       return "Content Too Large";
+    case 429:
+      return "Too Many Requests";
     case 431:
       return "Request Header Fields Too Large";
     case 500:

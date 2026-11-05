@@ -38,6 +38,7 @@ struct Options {
   bool tcp_nodelay = true;
   bool binary = false;  // Send raw floats instead of JSON.
   std::string path = "/v1/infer";
+  std::string api_key;
   std::string raw_body;       // When set, sent as is, as plain text, in place of model inputs.
   bool routing_keys = false;  // Send a per-connection X-Routing-Key header.
 };
@@ -62,6 +63,9 @@ ConnectionResult runConnection(const Options& options, const std::string& body,
     headers.emplace("X-Routing-Key", "client-" + std::to_string(index));
   }
 
+  if (!options.api_key.empty()) {
+    headers.emplace("Authorization", "Bearer " + options.api_key);
+  }
   const char* content_type = !options.raw_body.empty() ? "text/plain"
                              : options.binary          ? "application/octet-stream"
                                                        : "application/json";
@@ -145,6 +149,9 @@ Options parseOptions(std::span<char*> args) {
   }
   if (flags.contains("path")) {
     o.path = flags["path"];
+  }
+  if (flags.contains("api-key")) {
+    o.api_key = flags["api-key"];
   }
   if (flags.contains("raw-body")) {
     o.raw_body = flags["raw-body"];

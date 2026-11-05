@@ -32,6 +32,21 @@ std::vector<float> decodeFloats(const std::string& body) {
   return values;
 }
 
+std::unique_ptr<httplib::Server> makeHttpServer(const std::string& cert, const std::string& key) {
+  if (cert.empty() && key.empty()) {
+    return std::make_unique<httplib::Server>();
+  }
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+  auto server = std::make_unique<httplib::SSLServer>(cert.c_str(), key.c_str());
+  if (!server->is_valid()) {
+    throw std::runtime_error("cannot use TLS certificate or key");
+  }
+  return server;
+#else
+  throw std::runtime_error("TLS requested, but this build has no TLS support (IP_ENABLE_TLS)");
+#endif
+}
+
 std::int64_t parseDeadlineMs(const httplib::Request& req) {
   const std::string text = req.get_header_value("X-Deadline-Ms");
   std::int64_t value = 0;
@@ -180,46 +195,49 @@ struct HttpServer::Impl {
   ModelManager& manager;
   obs::Registry& registry;
   obs::Histogram& request_seconds;
-  httplib::Server http;
+  security::ApiKeys* api_keys = nullptr;
+  std::unique_ptr<httplib::Server> http;
 };
 
 HttpServer::HttpServer(ModelManager& models, obs::Registry& registry,
                        std::size_t connection_threads, bool tcp_nodelay,
-                       std::size_t keep_alive_max_requests)
+                       std::size_t keep_alive_max_requests, const std::string& tls_cert,
+                       const std::string& tls_key)
     : impl_(std::make_unique<Impl>(models, registry)) {
-  impl_->http.set_tcp_nodelay(tcp_nodelay);
-  impl_->http.set_keep_alive_max_count(keep_alive_max_requests);
-  impl_->http.new_task_queue = [connection_threads] {
+  impl_->http = makeHttpServer(tls_cert, tls_key);
+  impl_->http->set_tcp_nodelay(tcp_nodelay);
+  impl_->http->set_keep_alive_max_count(keep_alive_max_requests);
+  impl_->http->new_task_queue = [connection_threads] {
     return new httplib::ThreadPool(connection_threads);
   };
-  impl_->http.Post("/v1/infer", [this](const httplib::Request& req, httplib::Response& res) {
+  impl_->http->Post("/v1/infer", [this](const httplib::Request& req, httplib::Response& res) {
     impl_->handleInfer(req, res, "default");
   });
-  impl_->http.Post("/v1/models/:name/infer",
-                   [this](const httplib::Request& req, httplib::Response& res) {
-                     impl_->handleInfer(req, res, req.path_params.at("name"));
-                   });
-  impl_->http.Get("/v1/loaded", [this](const httplib::Request&, httplib::Response& res) {
+  impl_->http->Post("/v1/models/:name/infer",
+                    [this](const httplib::Request& req, httplib::Response& res) {
+                      impl_->handleInfer(req, res, req.path_params.at("name"));
+                    });
+  impl_->http->Get("/v1/loaded", [this](const httplib::Request&, httplib::Response& res) {
     res.set_content(nlohmann::json{{"models", impl_->manager.versions()}}.dump(), kJson);
   });
-  impl_->http.Get("/healthz", [](const httplib::Request&, httplib::Response& res) {
+  impl_->http->Get("/healthz", [](const httplib::Request&, httplib::Response& res) {
     res.set_content("ok\n", "text/plain");
   });
-  impl_->http.Get("/metrics", [this](const httplib::Request&, httplib::Response& res) {
+  impl_->http->Get("/metrics", [this](const httplib::Request&, httplib::Response& res) {
     std::string text = impl_->registry.renderPrometheus();
     if (impl_->events != nullptr) {
       text += impl_->events->renderPrometheus();
     }
     res.set_content(text, "text/plain; version=0.0.4");
   });
-  impl_->http.Get("/v1/models", [this](const httplib::Request&, httplib::Response& res) {
+  impl_->http->Get("/v1/models", [this](const httplib::Request&, httplib::Response& res) {
     if (impl_->models == nullptr) {
       sendError(res, 404, "no model registry");
       return;
     }
     res.set_content(impl_->models->toJson(), kJson);
   });
-  impl_->http.Put("/v1/models/:name", [this](const httplib::Request& req, httplib::Response& res) {
+  impl_->http->Put("/v1/models/:name", [this](const httplib::Request& req, httplib::Response& res) {
     if (impl_->models == nullptr) {
       sendError(res, 404, "no model registry");
       return;
@@ -232,7 +250,7 @@ HttpServer::HttpServer(ModelManager& models, obs::Registry& registry,
       sendError(res, 400, e.what());
     }
   });
-  impl_->http.Get("/v1/stats", [this](const httplib::Request&, httplib::Response& res) {
+  impl_->http->Get("/v1/stats", [this](const httplib::Request&, httplib::Response& res) {
     impl_->handleStats(res);
   });
 }
@@ -245,6 +263,36 @@ void HttpServer::attachEventStream(stream::ShardedLog& log,
   impl_->processor = &processor;
 }
 
+void HttpServer::attachApiKeys(security::ApiKeys& keys) {
+  impl_->api_keys = &keys;
+  impl_->http->set_pre_routing_handler([this](const httplib::Request& req, httplib::Response& res) {
+    if (req.path == "/healthz") {
+      return httplib::Server::HandlerResponse::Unhandled;
+    }
+    // Changing what is served needs more than running it does.
+    const security::Role needed =
+        req.method == "PUT" ? security::Role::kAdmin : security::Role::kClient;
+    const security::AuthResult result =
+        impl_->api_keys->check(req.get_header_value("Authorization"), needed);
+    switch (result) {
+      case security::AuthResult::kAllowed:
+        return httplib::Server::HandlerResponse::Unhandled;
+      case security::AuthResult::kUnauthenticated:
+        res.set_header("WWW-Authenticate", "Bearer");
+        sendError(res, 401, "a valid API key is required");
+        break;
+      case security::AuthResult::kForbidden:
+        sendError(res, 403, "this key cannot do that");
+        break;
+      case security::AuthResult::kRateLimited:
+        res.set_header("Retry-After", "1");
+        sendError(res, 429, "rate limit exceeded");
+        break;
+    }
+    return httplib::Server::HandlerResponse::Handled;
+  });
+}
+
 void HttpServer::attachLogger(obs::Logger& logger) { impl_->logger = &logger; }
 
 void HttpServer::attachTracer(obs::Tracer& tracer) { impl_->tracer = &tracer; }
@@ -255,13 +303,13 @@ void HttpServer::attachModelRegistry(cluster::ModelRegistry& registry) {
 
 int HttpServer::bind(const std::string& host, int port) {
   if (port == 0) {
-    return impl_->http.bind_to_any_port(host);
+    return impl_->http->bind_to_any_port(host);
   }
-  return impl_->http.bind_to_port(host, port) ? port : -1;
+  return impl_->http->bind_to_port(host, port) ? port : -1;
 }
 
-void HttpServer::serve() { impl_->http.listen_after_bind(); }
+void HttpServer::serve() { impl_->http->listen_after_bind(); }
 
-void HttpServer::stop() { impl_->http.stop(); }
+void HttpServer::stop() { impl_->http->stop(); }
 
 }  // namespace server

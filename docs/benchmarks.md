@@ -561,6 +561,17 @@ to test.
 
 Sampling 1 in 100 has no measurable cost, and tracing every request costs about 1.5%.
 
+### Authentication cost
+
+API key checks, 16 connections, median of 5 interleaved runs:
+
+| API keys | Requests/s (range) | p50 ms | p99 ms |
+| --- | --- | --- | --- |
+| Off | 35,725 (35,199 to 38,124) | 0.408 | 1.042 |
+| On | 35,970 (35,253 to 36,870) | 0.412 | 1.016 |
+
+TLS's cost was not measured, since the load generator does not speak HTTPS.
+
 ### Dashboard
 
 From `ops/run_demo.py --kill-after 70`, with one node killed and restarted under steady load. The node's

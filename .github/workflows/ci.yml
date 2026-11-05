@@ -20,6 +20,17 @@ jobs:
       - run: cmake --build --preset ${{ matrix.preset }}
       - run: ctest --preset ${{ matrix.preset }} --timeout 180
 
+  tls:
+    runs-on: ubuntu-24.04
+    env:
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build libssl-dev
+      - run: cmake --preset tls
+      - run: cmake --build --preset tls
+      - run: ctest --preset tls --timeout 180 -R 'integration.tls|integration.security|Router|HttpServer'
+
   macos:
     runs-on: macos-15
     steps:
