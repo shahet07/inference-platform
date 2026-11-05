@@ -16,6 +16,7 @@ SCRIPTS = [
     "run_stream_bench.py",
     "run_cluster_bench.py",
     "run_cluster_bottleneck.py",
+    "run_balance_bench.py",
     "run_hardware_contention.py",
     "run_wal_bench.py",
     "run_real_model_bench.py",

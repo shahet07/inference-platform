@@ -134,12 +134,26 @@ placement the same across processes and platforms, which `std::hash` does not pr
 **Retrying a failed request on the next node is safe.** Inference has no side effects. At worst, an
 event is recorded twice.
 
-**Two failure signals.** A failed live request removes a node immediately, since it is strong
-evidence and waiting would fail more requests. Background probes need 3 failures to remove a node
-and 2 successes to restore it, so a flapping node stays out.
+**Two failure signals, and neither is trusted alone.** Two failed live requests in a row remove a node,
+fewer than the 3 failed background probes it otherwise takes, and 2 good probes restore it, so a flapping node
+stays out. An early version removed a node on one failed request. A brief burst of refused connections then
+took out the only backend, and caused a total outage until probes restored it.
 
-**Limitation: the router is a single point of failure.** It holds no durable state, so several could
-run behind a load balancer, and the benchmarks do try several. There is no leader election.
+**If every backend looks down, the router tries them all.** Health checks can be wrong, and an overloaded
+cluster can fail its checks while still serving. Refusing everything would turn a partial problem into a
+total one, and if the backends really are down, requests still fail quickly. `router_panic_mode` shows when this
+is happening.
+
+**A request's deadline is not held against a backend.** Running out of a client's own deadline returns 504 and
+leaves the backend in rotation, otherwise one impatient client could remove healthy nodes.
+
+**Two balancing policies.** Consistent hashing keeps a key on one node, for per-key state or caches, but load
+follows the keys. Least-loaded compares two random backends and picks the one with fewer requests in flight,
+which follows load but gives up key affinity.
+
+**Routers are interchangeable.** They hold no durable state and hash keys identically, so several can run
+behind a load balancer, and one can die with no coordination. `tests/integration/chaos_test.py` checks both
+points. Something still has to send clients to a live router, which is that load balancer's job.
 
 **Metadata replicates by pull, last writer wins.** Each node periodically pulls every peer's registry
 and merges by `(version, node id)`. Merging is commutative, associative, and idempotent, so nodes
@@ -179,6 +193,5 @@ exporter dependency, but it means no Jaeger-style UI without adding one.
 
 - No TLS or authentication. Everything binds to localhost by default and assumes a trusted network.
 - The event log persists to one machine's disk and is not replicated by default.
-- The router is a single instance with no failover of its own.
 - All cluster benchmarks ran on one machine, so they show this machine's limits and not those of a
   real cluster with its own network.

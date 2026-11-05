@@ -109,6 +109,17 @@ TEST_F(WalTest, AppendNoWaitStillPersistsOnCleanShutdown) {
   EXPECT_EQ(log.read(0, 0, 100).events.size(), 50U);
 }
 
+TEST_F(WalTest, ReaderWaitingAtTheEndIsWokenWhenAnEventBecomesDurable) {
+  ShardedLog log(config());
+  std::thread producer([&] {
+    std::this_thread::sleep_for(5ms);
+    (void)log.append(eventFor(1));
+  });
+  const auto read = log.read(0, 0, 10, 30s);  // Must not wait anywhere near this long.
+  producer.join();
+  EXPECT_EQ(read.events.size(), 1U);
+}
+
 TEST_F(WalTest, TornTailIsRemovedAndEarlierEventsKept) {
   {
     ShardedLog log(config());

@@ -93,13 +93,51 @@ TEST(HealthMonitorTest, NodeGoesDownAndComesBack) {
   EXPECT_EQ(seen[1], std::make_pair(std::string("a"), true));
 }
 
-TEST(HealthMonitorTest, ReportFailureTakesEffectImmediately) {
-  std::atomic<bool> up{false};
+TEST(HealthMonitorTest, OneLiveFailureIsNotEnoughButTwoAre) {
   HealthMonitor monitor(
-      {"a"}, [&](const std::string&) { return up.load(); }, [](const std::string&, bool) {},
+      {"a"}, [&](const std::string&) { return false; }, [](const std::string&, bool) {},
       HealthConfig{.interval = 1h, .failure_threshold = 100, .success_threshold = 1});
   monitor.reportFailure("a");
+  EXPECT_TRUE(monitor.isHealthy("a"));
+  monitor.reportFailure("a");
   EXPECT_FALSE(monitor.isHealthy("a"));
+}
+
+TEST(HealthMonitorTest, GoodProbeForgivesAnEarlierLiveFailure) {
+  std::atomic<int> probes{0};
+  HealthMonitor monitor(
+      {"a"},
+      [&](const std::string&) {
+        ++probes;
+        return true;
+      },
+      [](const std::string&, bool) {},
+      HealthConfig{.interval = 1ms, .failure_threshold = 100, .success_threshold = 1});
+  monitor.reportFailure("a");
+  const int seen = probes.load();
+  ASSERT_TRUE(eventually([&] { return probes > seen + 2; }));
+  monitor.reportFailure("a");
+  EXPECT_TRUE(monitor.isHealthy("a"));
+}
+
+TEST(HealthMonitorTest, NodesCanBeAddedAndRemoved) {
+  std::atomic<int> new_node_probes{0};
+  HealthMonitor monitor(
+      {"a"},
+      [&](const std::string& node) {
+        if (node == "b") {
+          ++new_node_probes;
+        }
+        return true;
+      },
+      [](const std::string&, bool) {}, kFast);
+  EXPECT_FALSE(monitor.isHealthy("b"));
+  monitor.addNode("b");
+  EXPECT_TRUE(monitor.isHealthy("b"));
+  ASSERT_TRUE(eventually([&] { return new_node_probes > 0; }));
+  monitor.removeNode("a");
+  EXPECT_EQ(monitor.nodes(), std::vector<std::string>{"b"});
+  monitor.reportFailure("a");  // Unknown now, so harmless.
 }
 
 TEST(HealthMonitorTest, OneFailedNodeDoesNotAffectAnother) {

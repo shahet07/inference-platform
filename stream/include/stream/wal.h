@@ -94,6 +94,9 @@ class ShardWal {
   ShardWal(ShardWal&&) = delete;
   ShardWal& operator=(ShardWal&&) = delete;
 
+  // Called on the log's thread each time more records become durable. Set it before recover().
+  void setOnDurable(std::function<void()> on_durable);
+
   // Reads the log, removes a torn tail, and returns what survived. Call once, before anything else.
   // Throws std::runtime_error on corruption before the last segment, since that is not a torn
   // write.
@@ -103,6 +106,10 @@ class ShardWal {
   void enqueue(std::uint64_t offset, const Event& event);
   // Blocks until the record at `offset` has met the fsync policy. Returns false if the log stopped.
   bool waitDurable(std::uint64_t offset);
+
+  // The offset after the last record that has met the fsync policy. Readers stop here, so that
+  // nobody acts on an event a crash could still erase.
+  [[nodiscard]] std::uint64_t durableUpTo();
 
   // Consumers have passed `offset`, so sealed segments entirely below it can leave local disk.
   void trimBelow(std::uint64_t offset);
@@ -126,6 +133,7 @@ class ShardWal {
   void flushLoop();
   void intervalSyncLoop();
   void writeOut(const std::string& bytes, std::uint64_t next_offset);
+  void recordWritten(const std::map<std::uint64_t, std::uint64_t>& producers);
   void openSegment(std::uint64_t first_offset);
   void sealCurrent();
   void syncCurrent();
@@ -145,7 +153,7 @@ class ShardWal {
   std::uint64_t buffered_up_to_ = 0;  // Next offset after what is buffered.
   std::uint64_t durable_up_to_ = 0;   // Next offset after what meets the policy.
   std::uint64_t trim_below_ = 0;
-  std::map<std::uint64_t, std::uint64_t> producers_;
+  std::map<std::uint64_t, std::uint64_t> pending_producers_;  // Sequences not yet written out.
   bool stopping_ = false;
   bool failed_ = false;
 
@@ -153,9 +161,11 @@ class ShardWal {
   mutable std::mutex fd_mutex_;
   int fd_ = -1;
   // Used only by the flush thread, once started.
+  std::map<std::uint64_t, std::uint64_t> written_producers_;  // Sequences in the files.
   std::size_t segment_size_ = 0;
   std::uint64_t current_first_ = 0;
   std::vector<Segment> sealed_;
+  std::function<void()> on_durable_;
   std::thread flusher_;
   std::thread interval_syncer_;
 };

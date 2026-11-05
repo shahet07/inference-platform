@@ -19,6 +19,14 @@ ShardedLog::ShardedLog(const LogConfig& config)
     shard->ring.resize(capacity_);
     if (config.wal) {
       shard->wal = std::make_unique<ShardWal>(*config.wal, i);
+      // Readers waiting at the durable position are woken as it moves. Taking the lock first means
+      // a reader cannot check, miss this, and then sleep for its whole timeout.
+      shard->wal->setOnDurable([shard_ptr = shard.get()] {
+        {
+          const std::scoped_lock lock(shard_ptr->mutex);
+        }
+        shard_ptr->has_events.notify_all();
+      });
       RecoveredShard recovered = shard->wal->recover(capacity_);
       shard->head = recovered.first_offset;
       shard->tail = recovered.next_offset;
@@ -93,7 +101,8 @@ AppendResult ShardedLog::appendImpl(Event event, bool wait_for_wal) {
   shard.ring[offset % capacity_] = std::move(event);
   ++shard.tail;
   ++shard.stats.appended;
-  const bool wake_reader = shard.tail >= shard.wake_readers_at;
+  // With a write-ahead log, readers are woken when events become durable instead.
+  const bool wake_reader = !shard.wal && shard.tail >= shard.wake_readers_at;
   if (wake_reader) {
     shard.wake_readers_at = kNoWake;
   }
@@ -126,7 +135,7 @@ ReadResult ShardedLog::read(std::size_t shard_index, std::uint64_t offset, std::
     // Never wait for more than a shard can hold, or for more than was asked for.
     const std::uint64_t target = offset + std::clamp<std::size_t>(min_events, 1, capacity_);
     shard.has_events.wait_for(lock, wait, [&] {
-      if (shard.closed || shard.tail >= target) {
+      if (shard.closed || readableEnd(shard) >= target) {
         return true;
       }
       // Registered on each check: a wake meant for another reader may have cleared this.
@@ -137,7 +146,8 @@ ReadResult ShardedLog::read(std::size_t shard_index, std::uint64_t offset, std::
   ReadResult result;
   const std::uint64_t start = std::max(offset, shard.head);
   result.skipped = start - offset;
-  const std::uint64_t end = std::min(shard.tail, start + max_events);
+  const std::uint64_t readable = readableEnd(shard);
+  const std::uint64_t end = std::min(readable, start + max_events);
   if (end > start) {
     result.events.reserve(end - start);
     for (std::uint64_t i = start; i < end; ++i) {
@@ -145,8 +155,12 @@ ReadResult ShardedLog::read(std::size_t shard_index, std::uint64_t offset, std::
     }
   }
   result.next_offset = std::max(start, end);
-  result.closed = shard.closed && result.next_offset >= shard.tail;
+  result.closed = shard.closed && result.next_offset >= readable;
   return result;
+}
+
+std::uint64_t ShardedLog::readableEnd(Shard& shard) {
+  return shard.wal ? std::min(shard.tail, shard.wal->durableUpTo()) : shard.tail;
 }
 
 ShardedLog::GroupId ShardedLog::registerGroup() {

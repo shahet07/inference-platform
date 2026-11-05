@@ -1,0 +1,20 @@
+# The image that ops/k8s/ runs: release binaries and the bench model, on a small base.
+FROM ubuntu:24.04 AS build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    clang libclang-rt-dev cmake ninja-build python3 ca-certificates git curl
+ENV CXX=clang++
+WORKDIR /src
+COPY . .
+RUN cmake --preset release \
+    && cmake --build --preset release --target inference_server inference_router \
+    && cp build/release/_deps/onnxruntime-src/lib/libonnxruntime.so* /usr/local/lib/
+
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 curl \
+    && useradd --uid 10001 --no-create-home inference
+COPY --from=build /usr/local/lib/ /usr/local/lib/
+COPY --from=build /src/build/release/server/inference_server /usr/local/bin/
+COPY --from=build /src/build/release/cluster/inference_router /usr/local/bin/
+COPY bench/models/mlp_quant.onnx /models/model.onnx
+ENV LD_LIBRARY_PATH=/usr/local/lib
+USER 10001

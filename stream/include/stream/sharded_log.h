@@ -86,11 +86,12 @@ class ShardedLog {
   // for this shard returns kDuplicate. With a write-ahead log, this holds across restarts.
   [[nodiscard]] AppendResult appendIdempotent(Event event);
 
-  // Copies up to `max_events` starting at `offset`. If fewer than `min_events` are available,
-  // waits up to `wait` for that many, then returns what there is. Raising `min_events` lets a
-  // consumer that has caught up take batches instead of being woken for every event, at the cost
-  // of up to `wait` extra delay. An offset that was already evicted reads from the oldest
-  // retained event instead.
+  // Copies up to `max_events` starting at `offset`. With a write-ahead log, only events that have
+  // met the fsync policy can be read, so nobody acts on an event a crash could erase. If fewer than
+  // `min_events` are available, waits up to `wait` for that many, then returns what there is.
+  // Raising `min_events` lets a consumer that has caught up take batches instead of being woken for
+  // every event, at the cost of up to `wait` extra delay. An offset that was already evicted reads
+  // from the oldest retained event instead.
   [[nodiscard]] ReadResult read(std::size_t shard, std::uint64_t offset, std::size_t max_events,
                                 std::chrono::milliseconds wait = std::chrono::milliseconds(0),
                                 std::size_t min_events = 1);
@@ -137,6 +138,7 @@ class ShardedLog {
 
   AppendResult appendImpl(Event event, bool wait_for_wal);
   void trim(Shard& shard) const;
+  [[nodiscard]] static std::uint64_t readableEnd(Shard& shard);
 
   std::size_t capacity_;
   BackpressurePolicy policy_;

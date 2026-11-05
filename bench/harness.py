@@ -52,10 +52,10 @@ class Server:
 
 
 class Router:
-    def __init__(self, port, backends):
+    def __init__(self, port, backends, balance="hash"):
         self.port = port
         self.process = subprocess.Popen(
-            [str(ROUTER), "--port", str(port), "--backends",
+            [str(ROUTER), "--port", str(port), "--balance", balance, "--backends",
              ",".join(f"127.0.0.1:{b}" for b in backends)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

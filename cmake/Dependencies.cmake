@@ -67,6 +67,10 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(googletest onnxruntime httplib nlohmann_json eigen)
 
+# The library's default of 5 refuses connections during a burst, such as a load balancer opening many
+# at once. See docs/benchmarks.md.
+target_compile_definitions(httplib INTERFACE CPPHTTPLIB_LISTEN_BACKLOG=4096)
+
 add_library(eigen_headers INTERFACE)
 target_include_directories(eigen_headers SYSTEM INTERFACE ${eigen_SOURCE_DIR})
 

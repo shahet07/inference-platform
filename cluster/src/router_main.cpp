@@ -1,5 +1,6 @@
 #include <pthread.h>
 
+#include <chrono>
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
@@ -25,9 +26,12 @@ int main(int argc, char** argv) {
     for (std::size_t i = 1; i + 1 < args.size(); i += 2) {
       flags[std::string(args[i]).substr(2)] = args[i + 1];
     }
-    if (!flags.contains("backends")) {
-      std::cerr << "usage: inference_router --backends host:port,host:port [--host H] [--port P]\n"
-                   "  [--trace-file PATH] [--trace-sample N]\n";
+    if (flags.contains("help")) {
+      std::cerr
+          << "usage: inference_router --backends host:port,host:port [--host H] [--port P]\n"
+             "  [--balance hash|least-loaded] [--backend-timeout-ms N] [--health-interval-ms N]\n"
+             "  [--discover-dns name:port]\n"
+             "  [--trace-file PATH] [--trace-sample N]\n";
       return EXIT_FAILURE;
     }
 
@@ -45,6 +49,19 @@ int main(int argc, char** argv) {
       config.backends.push_back(backend);
     }
 
+    if (flags.contains("balance")) {
+      config.balance = flags["balance"] == "least-loaded" ? cluster::BalancePolicy::kLeastLoaded
+                                                          : cluster::BalancePolicy::kConsistentHash;
+    }
+    if (flags.contains("discover-dns")) {
+      config.discover_dns = flags["discover-dns"];
+    }
+    if (flags.contains("backend-timeout-ms")) {
+      config.backend_timeout = std::chrono::milliseconds(std::stoll(flags["backend-timeout-ms"]));
+    }
+    if (flags.contains("health-interval-ms")) {
+      config.health.interval = std::chrono::milliseconds(std::stoll(flags["health-interval-ms"]));
+    }
     obs::Logger logger(std::cerr, "router");
     config.logger = &logger;
     std::unique_ptr<obs::Tracer> tracer;

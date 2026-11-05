@@ -39,7 +39,11 @@ with tempfile.TemporaryDirectory() as directory:
                 kills += 1
                 continue
         else:
-            out, err = process.communicate(timeout=120)
+            try:
+                out, err = process.communicate(timeout=120)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                raise AssertionError("the worker never finished, which means an event was lost")
         assert process.returncode == 0, f"worker failed: {err[-400:]}"
         break
 

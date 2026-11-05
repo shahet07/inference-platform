@@ -84,6 +84,9 @@ curl -X PUT localhost:8080/v1/models/resnet -d '{"uri":"resnet-v2.onnx"}'
 curl -s localhost:8080/v1/loaded
 ```
 
+Run routers with `--balance least-loaded` to ignore keys, and `--discover-dns name:port` to find nodes through DNS.
+`ops/autoscaler.py` adds and removes local nodes, and `ops/k8s/` holds Kubernetes manifests.
+
 A demo cluster with the dashboard, at http://localhost:3000/d/inference:
 
 ```sh
@@ -114,6 +117,11 @@ Every backend is down, or the router cannot reach them.
 3. Check each node's `/healthz`, its process, and its log.
 
 The router restores a backend after 2 good probes, about half a second, with no action needed.
+
+### `router_panic_mode` is 1
+
+Every backend looks unhealthy, so the router is trying them all anyway. Check the nodes first. If they are serving,
+the health checks are what is wrong, often because of overload.
 
 ### A new model is not taking traffic
 
@@ -156,7 +164,7 @@ drained. The event log survives the restart only if `--events-dir` is set.
 
 ## Limitations
 
-No TLS or authentication, a single router instance. All
+No TLS or authentication. All
 benchmarks ran on one machine. See [design notes](docs/design.md#known-gaps).
 
 ## License

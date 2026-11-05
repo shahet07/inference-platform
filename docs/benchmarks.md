@@ -335,6 +335,58 @@ slightly lower, not higher.
 and moved only that node's keys (14 of 60). The node returned, its keys came back, and it caught up on
 metadata written while it was down. With all nodes dead, the router returns 503.
 
+### Routing policies
+
+Three nodes with the heavy model, 32 connections, median of 3 runs. "One slow" gives one node 1 worker and the
+others 4.
+
+| Scenario | Policy | Requests/s | p50 ms | p99 ms | p99.9 ms |
+| --- | --- | --- | --- | --- | --- |
+| Equal nodes | Consistent hash | 16,863 | 1.04 | 11.85 | 119.19 |
+| Equal nodes | Least loaded | 18,081 | 1.01 | 12.32 | 121.12 |
+| One slow | Consistent hash | 17,277 | 1.26 | 13.15 | 55.40 |
+| One slow | Least loaded | 17,177 | 1.19 | 16.43 | 53.09 |
+
+**Least-loaded routing made no clear difference here**, and the slow node's share only fell from 26% to 23%. This
+model's 107 µs of compute is small next to the router's own cost, so a node with fewer workers is barely slower
+as seen by a client. These tails also come from a machine near CPU saturation. This does not show the policy is
+useless, only that this setup cannot show a benefit.
+
+### Fault injection
+
+`tests/integration/chaos_test.py` puts a fault-injecting proxy between the router and its nodes, with a 500 ms
+backend allowance. Results from a recorded debug run:
+
+| Fault | What clients saw |
+| --- | --- |
+| Node silently hangs, connections stay open | One request took about 505 ms, then failed over; none failed |
+| Connections reset as data arrives | No failed requests |
+| Connections refused | No failed requests |
+| Node slow, 50 ms client deadline | 504 in about 53 ms; the node stayed in rotation |
+| Node flaps up and down | It returned only once stable |
+| Every backend looks down, then recovers | Requests were still tried, and succeeded before probes had recovered |
+| One of two routers dies | The other serves the same keys on the same nodes |
+
+### Autoscaling
+
+`tests/integration/autoscale_test.py` runs `ops/autoscaler.py` for real on one machine. Nodes went from 1 to the
+maximum of 3 under load and back to 1 when idle, with 184,461 requests in the recorded run and none failed.
+
+### Bugs these tests found
+
+- **A connection burst took down the whole cluster.** The HTTP library's listen backlog defaulted to 5, so 32 new
+  connections were refused, and one failed request removed a node immediately, even the only one. About 8% of
+  requests failed. Fixed with a larger backlog, requiring two failures in a row, and panic mode.
+- **Exactly-once could lose events.** The producer snapshot named events not yet on disk, so after a crash their
+  retries looked like duplicates. Consumers could also read events a crash could still erase. The test hung when
+  this happened, which is how it surfaced. Passing once had been luck. Fixed by snapshotting only synced data, and
+  letting readers see only durable events.
+- **A deadline could return the wrong status.** A read timeout could fire just before the deadline clock expired,
+  which returned 503 and counted against the backend.
+
+**Unexplained:** in one sanitizer run, the exactly-once and autoscale tests timed out. They then passed 8 of 8
+repeat runs alone, and the cause was not found.
+
 ## Phase 4: performance layer
 
 Single-threaded, `-O3`. Our kernels and Eigen run with random weights in the same shape as

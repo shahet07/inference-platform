@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 #include <httplib.h>
 
+#include <atomic>
 #include <cstring>
 #include <filesystem>
 #include <nlohmann/json.hpp>
@@ -156,6 +157,27 @@ TEST_F(HttpServerTest, StatsAreEmptyWithoutEventStream) {
   const auto response = client_.Get("/v1/stats");
   ASSERT_TRUE(response);
   EXPECT_TRUE(json::parse(response->body).at("windows").empty());
+}
+
+TEST_F(HttpServerTest, BurstOfNewConnectionsIsNotRefused) {
+  // The library's default listen backlog of 5 refused connections here, which took down a router.
+  constexpr int kConnections = 128;
+  std::vector<std::thread> threads;
+  threads.reserve(kConnections);
+  std::atomic<int> failures{0};
+  for (int i = 0; i < kConnections; ++i) {
+    threads.emplace_back([this, &failures] {
+      httplib::Client client("127.0.0.1", port_);
+      client.set_connection_timeout(std::chrono::seconds(5));
+      if (!client.Get("/healthz")) {
+        ++failures;
+      }
+    });
+  }
+  for (std::thread& thread : threads) {
+    thread.join();
+  }
+  EXPECT_EQ(failures.load(), 0);
 }
 
 TEST_F(HttpServerTest, HealthzReturnsOk) {

@@ -281,9 +281,13 @@ RecoveredShard ShardWal::recover(std::size_t max_events) {
   }
   buffered_up_to_ = next;
   durable_up_to_ = next;
-  producers_ = recovered.producers;
+  written_producers_ = recovered.producers;
   start();
   return recovered;
+}
+
+void ShardWal::setOnDurable(std::function<void()> on_durable) {
+  on_durable_ = std::move(on_durable);
 }
 
 void ShardWal::start() {
@@ -299,10 +303,15 @@ void ShardWal::enqueue(std::uint64_t offset, const Event& event) {
     appendRecord(buffer_, offset, event);
     buffered_up_to_ = offset + 1;
     if (event.producer_id != 0) {
-      producers_[event.producer_id] = event.sequence;
+      pending_producers_[event.producer_id] = event.sequence;
     }
   }
   has_data_.notify_one();
+}
+
+std::uint64_t ShardWal::durableUpTo() {
+  const std::scoped_lock lock(mutex_);
+  return durable_up_to_;
 }
 
 bool ShardWal::waitDurable(std::uint64_t offset) {
@@ -318,12 +327,15 @@ void ShardWal::flushLoop() {
     const bool stopping = stopping_;
     std::string bytes;
     bytes.swap(buffer_);
+    std::map<std::uint64_t, std::uint64_t> producers;
+    producers.swap(pending_producers_);
     const std::uint64_t next_offset = buffered_up_to_;
     lock.unlock();
     bool ok = true;
     try {
       if (!bytes.empty()) {
         writeOut(bytes, next_offset);
+        recordWritten(producers);
         // Sharing this sync among everything buffered is the group commit.
         if (config_.fsync == FsyncPolicy::kEveryAppend) {
           syncCurrent();
@@ -348,9 +360,20 @@ void ShardWal::flushLoop() {
       durable_up_to_ = next_offset;
     }
     durable_.notify_all();
+    lock.unlock();
+    if (on_durable_) {
+      on_durable_();
+    }
+    lock.lock();
     if (stopping && buffer_.empty()) {
       return;
     }
+  }
+}
+
+void ShardWal::recordWritten(const std::map<std::uint64_t, std::uint64_t>& producers) {
+  for (const auto& [producer, sequence] : producers) {
+    written_producers_[producer] = sequence;
   }
 }
 
@@ -505,16 +528,11 @@ std::vector<Event> ShardWal::readArchived(std::uint64_t offset, std::size_t max_
 }
 
 void ShardWal::saveProducers() {
-  std::map<std::uint64_t, std::uint64_t> copy;
-  {
-    const std::scoped_lock lock(mutex_);
-    copy = producers_;
-  }
   const fs::path destination = shard_dir_ / "producers.snapshot";
   const fs::path temporary = shard_dir_ / "producers.snapshot.tmp";
   {
     std::ofstream file(temporary, std::ios::trunc);
-    for (const auto& [producer, sequence] : copy) {
+    for (const auto& [producer, sequence] : written_producers_) {
       file << producer << ' ' << sequence << '\n';
     }
   }

@@ -1,0 +1,127 @@
+# Nodes behind a headless Service, which routers discover through DNS, plus a CPU-based autoscaler.
+# Build the image from ci/Dockerfile.runtime and load it where your cluster can pull it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-node
+  labels: {app: inference-node}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: inference-node}
+  template:
+    metadata:
+      labels: {app: inference-node}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      # Longer than the router's discovery interval, so routers stop sending before a node exits.
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: server
+          image: inference-platform:latest
+          imagePullPolicy: IfNotPresent
+          command: ["inference_server", "--model", "/models/model.onnx", "--host", "0.0.0.0",
+                    "--port", "8080", "--workers", "2"]
+          ports: [{containerPort: 8080, name: http}]
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 2
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              sleep: {seconds: 5}
+          resources:
+            requests: {cpu: "500m", memory: "256Mi"}
+            limits: {memory: "512Mi"}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+---
+# Headless: DNS returns each ready pod's address, which is what the router's discovery needs.
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-node
+spec:
+  clusterIP: None
+  selector: {app: inference-node}
+  ports: [{port: 8080, name: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-router
+  labels: {app: inference-router}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: inference-router}
+  template:
+    metadata:
+      labels: {app: inference-router}
+    spec:
+      containers:
+        - name: router
+          image: inference-platform:latest
+          imagePullPolicy: IfNotPresent
+          command: ["inference_router", "--host", "0.0.0.0", "--port", "8000", "--backends", "",
+                    "--discover-dns", "inference-node:8080"]
+          ports: [{containerPort: 8000, name: http}]
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 2
+          resources:
+            requests: {cpu: "250m", memory: "128Mi"}
+            limits: {memory: "256Mi"}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+---
+# Routers hold no state and hash keys identically, so a normal load-balancing Service suits them.
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-router
+spec:
+  selector: {app: inference-router}
+  ports: [{port: 8000, name: http}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: inference-node
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: inference-node}
+---
+# CPU, because it needs no extra components. Queue wait, as in ops/autoscaler.py, is the better signal
+# but would need a metrics adapter.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: inference-node
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: inference-node
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: 70}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 120

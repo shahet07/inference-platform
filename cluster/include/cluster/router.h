@@ -1,6 +1,8 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,8 +14,26 @@
 
 namespace cluster {
 
+enum class BalancePolicy : std::uint8_t {
+  // A key stays on one node while the cluster is stable, which suits per-key state or caches. Load
+  // follows the keys, so a few busy keys can overload a node. Requests with no key use
+  // kLeastLoaded.
+  kConsistentHash,
+  // Two random backends are compared, and the one with fewer requests in flight is used. Ignores
+  // keys.
+  kLeastLoaded,
+};
+
 struct RouterConfig {
   std::vector<std::string> backends;  // "host:port"
+  BalancePolicy balance = BalancePolicy::kConsistentHash;
+  // How long a backend may take to answer before it counts as failed. A request's own deadline
+  // takes precedence, and running past that does not count against the backend.
+  std::chrono::milliseconds backend_timeout{30000};
+  // Optional "name:port". The name is resolved periodically, and backends follow the addresses it
+  // returns, which is how pods behind a Kubernetes headless Service are found.
+  std::string discover_dns;
+  std::chrono::milliseconds discover_interval{2000};
   std::size_t virtual_nodes = 128;
   std::size_t connection_threads = 256;
   // Nodes tried for one request. Inference has no side effects, so retrying is safe.
@@ -28,6 +48,8 @@ struct RouterConfig {
 // (falling back to X-Client-Id), so a key stays on one node while the cluster is stable.
 //   POST /v1/infer, /v1/models/{name}/infer    Forwarded; X-Served-By names the backend
 //   GET  /v1/cluster  Each backend's health
+//   POST /v1/backends {"backend":"host:port"}  Adds a backend
+//   DELETE /v1/backends/{host:port}            Removes one; requests already on it still finish
 //   GET  /healthz     200 while at least one backend is healthy
 //   GET  /metrics     Prometheus text format
 class Router {

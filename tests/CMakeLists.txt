@@ -73,3 +73,15 @@ add_test(NAME integration.exactly_once
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/exactly_once_test.py
     $<TARGET_FILE:exactly_once_worker>)
 set_tests_properties(integration.exactly_once PROPERTIES TIMEOUT 240)
+
+add_test(NAME integration.chaos
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/chaos_test.py
+    $<TARGET_FILE:inference_server> $<TARGET_FILE:inference_router>
+    ${CMAKE_SOURCE_DIR}/bench/models/mlp_quant.onnx 19400)
+set_tests_properties(integration.chaos PROPERTIES TIMEOUT 240)
+
+add_test(NAME integration.autoscale
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/autoscale_test.py
+    $<TARGET_FILE:inference_server> $<TARGET_FILE:inference_router> $<TARGET_FILE:load_gen>
+    ${CMAKE_SOURCE_DIR}/bench/models/mlp_heavy_quant.onnx 19500)
+set_tests_properties(integration.autoscale PROPERTIES TIMEOUT 240)
