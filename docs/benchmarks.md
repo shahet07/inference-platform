@@ -15,6 +15,10 @@ These numbers have real limits:
 - **Laptops are noisy.** Core types differ and the machine can throttle. Scripts interleave
   configurations and report the median of 3 to 5 runs, but differences of a few percent are not
   meaningful. Do not compare across machines.
+- **Busy machines are detected.** One full run happened during ordinary desktop use, and its numbers fell by half. It was
+  thrown away. `bench/run_all.py` now checks before and after each benchmark that inference still scales across 4
+  processes, waits out a busy machine, and reruns anything disturbed. `bench/results/run_conditions.json` records that
+  all 20 benchmarks here ran clean, with that check between 3.74× and 4.00×.
 - **The benchmark models are small synthetic MLPs** with random weights: a repeatable compute load,
   with no predictive value. [MobileNetV2](#a-real-model-mobilenetv2) tests whether results carry over.
 - **The load is closed loop unless stated**, which understates tail latency under overload.
@@ -34,10 +38,10 @@ Light model, 64 connections, no batching wait.
 
 | Workers | Requests/s | p50 ms | p99 ms | Server cores | Mean batch |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 28,323 | 2.28 | 4.86 | 5.28 | 7.0 |
-| 4 | 32,580 | 1.40 | 6.58 | 5.53 | 3.3 |
-| 8 | 34,683 | 1.52 | 6.10 | 5.53 | 1.9 |
-| 16 | 35,080 | 1.41 | 5.74 | 5.66 | 1.5 |
+| 1 | 27,084 | 2.32 | 5.04 | 5.16 | 7.1 |
+| 4 | 32,946 | 1.46 | 6.81 | 5.08 | 3.5 |
+| 8 | 36,466 | 1.34 | 5.80 | 4.81 | 2.0 |
+| 16 | 36,375 | 1.31 | 6.48 | 4.82 | 1.6 |
 
 ![Throughput by worker threads](charts/server_scaling.svg)
 ![p99 latency by worker threads](charts/server_latency.svg)
@@ -53,22 +57,22 @@ The first version held each batch open for up to 1 ms. A metrics check showed th
 
 | Connections | Max wait | Requests/s | p50 ms | p99 ms | Mean batch |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 1000 µs | 543 | 1.85 | 2.44 | 1.0 |
-| 1 | 200 µs | 1,635 | 0.56 | 1.05 | 1.0 |
-| 1 | **0** | **9,005** | **0.11** | **0.15** | 1.0 |
-| 16 | 1000 µs | 10,461 | 1.67 | 2.31 | 4.5 |
-| 16 | 200 µs | 29,628 | 0.54 | 0.82 | 3.4 |
-| 16 | **0** | **36,741** | **0.41** | **1.01** | 1.3 |
-| 64 | 1000 µs | 32,810 | 1.54 | 6.50 | 7.3 |
-| 64 | 200 µs | 33,505 | 1.54 | 6.72 | 5.5 |
-| 64 | **0** | **33,092** | **1.42** | **7.11** | 3.3 |
+| 1 | 1000 µs | 567 | 1.75 | 2.52 | 1.0 |
+| 1 | 200 µs | 1,879 | 0.52 | 0.67 | 1.0 |
+| 1 | **0** | **8,343** | **0.12** | **0.18** | 1.0 |
+| 16 | 1000 µs | 10,149 | 1.72 | 2.64 | 4.5 |
+| 16 | 200 µs | 29,714 | 0.53 | 0.86 | 3.3 |
+| 16 | **0** | **35,767** | **0.38** | **1.42** | 1.3 |
+| 64 | 1000 µs | 32,101 | 1.39 | 8.23 | 7.4 |
+| 64 | 200 µs | 32,261 | 1.40 | 7.62 | 5.8 |
+| 64 | **0** | **32,741** | **1.44** | **7.17** | 3.3 |
 
-**Result at 16 connections: 3.5× the throughput (10,461 to 36,741 requests/s) and p50 down from 1.67
-to 0.41 ms.** p99 fell from 2.31 to 1.01 ms. At 64 connections the setting makes no meaningful
+**Result at 16 connections: 3.5× the throughput (10,149 to 35,767 requests/s) and p50 down from 1.72
+to 0.38 ms.** p99 fell from 2.64 to 1.42 ms. At 64 connections the setting makes no meaningful
 difference, since queues fill batches anyway.
 
-Trade-offs: at 16 connections, a 200 µs wait gives a better p99 than no wait (0.82 vs 1.01 ms) with
-less throughput. A model where batching saves real compute may also want a wait, so it stays configurable.
+Trade-offs: at 16 connections, a 200 µs wait gives a better p99 than no wait (0.86 vs 1.42 ms) with
+less throughput. A model where batching saves real compute might want a wait, so it stays configurable.
 
 ### What did not help
 
@@ -78,30 +82,29 @@ like the classic stall between Nagle's algorithm and delayed ACKs. **Testing did
 
 | Config, 64 connections, no batch wait | Requests/s | p50 ms | p99 ms |
 | --- | --- | --- | --- |
-| Baseline | 29,958 | 1.97 | 6.01 |
-| `TCP_NODELAY` on server | 31,448 | 1.88 | 5.60 |
-| `TCP_NODELAY` on both | 31,290 | 1.90 | 5.51 |
-| Keep-alive limit removed | 32,267 | 1.44 | 7.37 |
-| Both | 33,075 | 1.52 | 6.87 |
+| Baseline | 28,768 | 1.96 | 7.18 |
+| `TCP_NODELAY` on server | 29,863 | 1.89 | 6.74 |
+| `TCP_NODELAY` on both | 29,761 | 1.89 | 7.16 |
+| Keep-alive limit removed | 32,331 | 1.44 | 7.80 |
+| Both | 32,617 | 1.44 | 7.23 |
 
-Both are kept, for about 10% more throughput and 23% lower p50. p99 got slightly worse with the
-keep-alive change, and may be noise.
+Both are kept, for about 13% more throughput and 27% lower p50. p99 did not improve.
 
 ### Profiles
 
 These come from macOS `sample`, since `perf` is Linux-only, and are drawn by `tools/flamegraph.py`.
 Sampling counts wall-clock time, so a thread blocked in a system call counts as busy there.
 
-- [After tuning](../bench/results/flamegraph_after.svg): 712 busy samples. Time is spread across HTTP
-  routing (37%) and batch workers (32%), and `__sendto` leads self time at 14%.
-- [Before tuning](../bench/results/flamegraph_before.svg): only 11 busy samples, too few to read. The
+- [After tuning](../bench/results/flamegraph_after.svg): 708 busy samples, spread across HTTP handling and batch
+  workers, with `__sendto` leading self time at 14.5%.
+- [Before tuning](../bench/results/flamegraph_before.svg): only 53 busy samples, far fewer. The
   server spends its time idle, waiting for batches to fill. **A profile of busy threads barely shows
   this kind of bottleneck**, and it was the latency metrics that exposed it.
 - [Router](../bench/results/flamegraph_router.svg): dominated by `__sendto`.
 
 ### Sanitizers
 
-All 119 tests pass with no reports under AddressSanitizer with UndefinedBehaviorSanitizer, and under
+All 278 tests pass with no reports under AddressSanitizer with UndefinedBehaviorSanitizer, and under
 ThreadSanitizer, including end-to-end tests with real processes. An earlier run of the server under
 real load was also clean. ONNX Runtime is a prebuilt binary and is not instrumented.
 
@@ -121,17 +124,17 @@ place of the thread-per-connection library. Light model, raw floats, 4 workers, 
 
 | Frontend | Connections | Requests/s | p50 ms | p99 ms | RSS MB | Threads |
 | --- | --- | --- | --- | --- | --- | --- |
-| Thread per connection | 16 | 35,897 | 0.40 | 1.00 | 32 | 262 |
-| Thread per connection | 64 | 32,844 | 1.53 | 6.97 | 34 | 262 |
-| Thread per connection | 256 | 27,960 | 8.15 | 28.14 | 40 | 278 |
-| Thread per connection | 1,000 | 22,916 | 42.51 | 93.24 | 72 | 1,022 |
-| Event-driven | 16 | 46,186 | 0.34 | 0.57 | 28 | 10 |
-| Event-driven | 64 | 44,567 | 1.03 | 7.37 | 28 | 10 |
-| Event-driven | 256 | 39,462 | 5.96 | 15.98 | 29 | 10 |
-| Event-driven | 1,000 | 32,928 | 29.14 | 72.65 | 29 | 10 |
+| Thread per connection | 16 | 38,169 | 0.38 | 1.38 | 32 | 262 |
+| Thread per connection | 64 | 34,571 | 1.39 | 5.76 | 34 | 262 |
+| Thread per connection | 256 | 28,199 | 7.88 | 28.94 | 40 | 278 |
+| Thread per connection | 1,000 | 23,594 | 40.19 | 99.64 | 72 | 1,022 |
+| Event-driven | 16 | 48,831 | 0.32 | 0.59 | 28 | 10 |
+| Event-driven | 64 | 44,457 | 1.01 | 8.00 | 28 | 10 |
+| Event-driven | 256 | 39,561 | 6.12 | 15.74 | 29 | 10 |
+| Event-driven | 1,000 | 34,781 | 27.19 | 67.91 | 29 | 10 |
 
-**29 to 44% more throughput, with 10 threads instead of up to 1,022, and 29 MB instead of 72 MB at 1,000
-connections.** Connections share one read buffer per thread, and release their buffers when idle. Before that, this
+**28 to 47% more throughput, with 10 threads instead of up to 1,022, and 29 MB instead of 72 MB at 1,000
+connections.** Its p99 is better at every count except 64 connections (8.00 against 5.76 ms). Connections share one read buffer per thread, and release their buffers when idle. Before that, this
 frontend used 135 MB at 1,000 connections. The load generator uses a thread per connection on the same machine, which
 limits both frontends at high counts.
 
@@ -149,41 +152,40 @@ fixed synthetic data, so this measures speed and not accuracy. CPU only, one thr
 
 | Connections | Max wait | Requests/s | p50 ms | p99 ms | Mean batch | Model ms per batch |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | None | 240.8 | 4.11 | 4.44 | 1.0 | 3.67 |
-| 1 | 5 ms | 80.5 | 12.68 | 13.44 | 1.0 | 4.70 |
-| 1 | 20 ms | 30.2 | 33.44 | 37.96 | 1.0 | 6.38 |
-| 8 | None | 290.7 | 27.34 | 28.91 | 4.0 | 13.68 |
-| 8 | 5 ms | 222.7 | 35.97 | 38.12 | 8.0 | 27.78 |
-| 8 | 20 ms | 136.0 | 59.66 | 63.65 | 8.0 | 30.82 |
-| 32 | None | 293.3 | 109.88 | 117.87 | 15.8 | 54.06 |
-| 32 | 5 ms | 293.3 | 109.49 | 125.01 | 15.9 | 54.36 |
-| 32 | 20 ms | 277.3 | 115.24 | 126.10 | 32.0 | 109.53 |
+| 1 | None | 258.5 | 3.84 | 4.35 | 1.0 | 3.43 |
+| 1 | 5 ms | 79.2 | 12.90 | 13.47 | 1.0 | 4.72 |
+| 1 | 20 ms | 27.7 | 37.77 | 41.98 | 1.0 | 7.98 |
+| 8 | None | 290.7 | 27.36 | 29.03 | 4.0 | 13.66 |
+| 8 | 5 ms | 225.3 | 35.35 | 36.62 | 8.0 | 27.05 |
+| 8 | 20 ms | 130.7 | 62.39 | 64.34 | 8.0 | 31.40 |
+| 32 | None | 288.0 | 109.35 | 133.51 | 15.9 | 54.50 |
+| 32 | 5 ms | 293.3 | 109.01 | 111.19 | 15.9 | 54.04 |
+| 32 | 20 ms | 277.3 | 114.12 | 129.01 | 32.0 | 109.08 |
 
-**No. Waiting never helped.** Batching itself barely saves compute here: 54.06 ms for 15.8 images is 3.42 ms
-each, against about 3.6 ms alone, about 5% less. That is on this CPU. A GPU, where batching commonly pays
-off far more, was not tested.
+**No. Waiting never helped.** Batching itself barely saves compute here: 54.50 ms for 15.9 images is 3.44 ms
+each, against about 3.43 ms alone, about -0% less, on this CPU.
 
 **Workers against batching**, 32 connections:
 
 | Workers | Max batch | Requests/s | p50 ms | p99 ms |
 | --- | --- | --- | --- | --- |
-| 1 | 1 | 273.3 | 117.10 | 126.89 |
-| 4 | 1 | 1,059.7 | 30.19 | 31.64 |
-| 8 | 1 | 1,819.3 | 17.42 | 20.26 |
-| 4 | 8 | 1,098.3 | 31.67 | 41.05 |
-| 8 | 8 | 1,685.7 | 16.89 | 53.64 |
+| 1 | 1 | 286.8 | 110.87 | 120.09 |
+| 4 | 1 | 1,082.5 | 29.53 | 30.73 |
+| 8 | 1 | 1,901.2 | 16.58 | 20.44 |
+| 4 | 8 | 1,124.5 | 30.75 | 39.71 |
+| 8 | 8 | 1,930.8 | 14.50 | 36.16 |
 
-Unlike the small synthetic model, this one scales with workers, reaching 6.7× at 8, because compute is now the
+Unlike the small synthetic model, this one scales with workers, reaching 6.6× at 8, because compute is now the
 limit. Batching on top adds little, and at 8 workers it has a worse p99.
 
 **JSON against raw floats**, 8 connections, 4 workers:
 
 | Protocol | Requests/s | p50 ms | p99 ms |
 | --- | --- | --- | --- |
-| `application/octet-stream` | 1,060.3 | 5.76 | 17.45 |
-| JSON | 56.7 | 141.35 | 152.13 |
+| `application/octet-stream` | 1,095.5 | 5.74 | 16.73 |
+| JSON | 56.5 | 141.70 | 157.97 |
 
-**Raw floats are 18.7× faster**, since the model takes under 5 ms and encoding 150,528 numbers as text takes
+**Raw floats are 19.4× faster**, since the model takes under 5 ms and encoding 150,528 numbers as text takes
 far longer.
 
 ### Core ML
@@ -193,26 +195,26 @@ models fixed to each batch size, since accelerators generally want static shapes
 
 | Provider | Batch | Images/s | ms per image |
 | --- | --- | --- | --- |
-| cpu | 1 | 75.5 | 13.25 |
-| coreml | 1 | 1,682.4 | 0.59 |
-| cpu | 8 | 74.6 | 13.40 |
-| coreml | 8 | 1,340.7 | 0.75 |
-| cpu | 32 | 74.3 | 13.46 |
-| coreml | 32 | 1,428.1 | 0.70 |
+| cpu | 1 | 79.1 | 12.64 |
+| coreml | 1 | 1,463.3 | 0.68 |
+| cpu | 8 | 78.3 | 12.76 |
+| coreml | 8 | 1,566.2 | 0.64 |
+| cpu | 32 | 76.6 | 13.06 |
+| coreml | 32 | 1,622.4 | 0.62 |
 
-**Core ML is about 22× faster than the CPU on this float model, and batching does not help it either.** Throughput at
-batch 8 and 32 is below batch 1. Core ML chooses between the GPU, Neural Engine, and CPU by itself, and these numbers
+**Core ML is about 18× faster than the CPU on this float model, and batching has no consistent effect.** Here,
+batch 32 is 11% above batch 1, and an earlier run on the same code showed it about 15% below. Core ML chooses between the GPU, Neural Engine, and CPU by itself, and these numbers
 do not show which it picked. This is one model on one chip, and NVIDIA GPUs were not tested. The quantized CPU model
-above runs about 3.6 ms per image, so for CPU serving, quantizing is the larger win.
+above runs about 3.4 ms per image, so for CPU serving, quantizing is the larger win.
 
 Through the server, 16 connections, raw floats, batch size 1:
 
 | Provider | Workers | Requests/s | p50 ms | p99 ms |
 | --- | --- | --- | --- | --- |
-| cpu | 1 | 75.4 | 211.01 | 224.34 |
-| cpu | 4 | 292.8 | 53.71 | 62.27 |
-| coreml | 1 | 583.6 | 28.26 | 33.73 |
-| coreml | 4 | 667.6 | 23.87 | 28.95 |
+| cpu | 1 | 79.0 | 202.43 | 209.12 |
+| cpu | 4 | 302.8 | 53.03 | 54.17 |
+| coreml | 1 | 536.2 | 16.52 | 286.45 |
+| coreml | 4 | 575.8 | 24.24 | 96.59 |
 
 ### Hot-swapping models
 
@@ -234,16 +236,16 @@ randomly, with a mix of mostly short and some long answers. Median of 3 runs, 12
 
 | Requests/s | Batching | Tokens/s | First token p50 | First token p99 | Total p50 | Total p99 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 20 | Continuous | 546 | 1.5 | 3.6 | 6.0 | 46.9 |
-| 20 | Static | 543 | 1.5 | 35.2 | 7.2 | 48.4 |
-| 60 | Continuous | 1,466 | 0.9 | 1.5 | 4.5 | 37.5 |
-| 60 | Static | 1,497 | 1.1 | 37.3 | 6.2 | 42.8 |
-| 120 | Continuous | 2,740 | 0.9 | 1.3 | 4.3 | 42.1 |
-| 120 | Static | 2,696 | 1.9 | 29.3 | 8.1 | 50.4 |
-| 240 | Continuous | 5,355 | 0.8 | 1.4 | 4.4 | 44.8 |
-| 240 | Static | 5,401 | 9.2 | 43.5 | 18.7 | 54.3 |
+| 20 | Continuous | 547 | 1.6 | 9.5 | 7.2 | 48.0 |
+| 20 | Static | 552 | 1.6 | 38.5 | 8.3 | 56.5 |
+| 60 | Continuous | 1,439 | 1.0 | 2.3 | 4.6 | 48.8 |
+| 60 | Static | 1,478 | 1.1 | 34.7 | 6.5 | 48.5 |
+| 120 | Continuous | 2,708 | 0.8 | 1.6 | 4.4 | 42.2 |
+| 120 | Static | 2,703 | 1.1 | 27.9 | 7.1 | 50.0 |
+| 240 | Continuous | 5,175 | 0.7 | 1.5 | 4.1 | 43.1 |
+| 240 | Static | 5,375 | 6.7 | 28.4 | 13.1 | 48.2 |
 
-**At 240 requests/s, continuous batching's first-token p99 is about 30× better (1.4 against 43.5 ms), with the same
+**At 240 requests/s, continuous batching's first-token p99 is about 19× better (1.5 against 28.4 ms), with similar
 throughput.** This shows how the scheduling behaves. A model this small takes well under a millisecond per step, and a
 larger one's steps would take far longer, so absolute numbers would be very different. Its sampling always picks the most
 likely token, and there is no prefix caching or per-tenant fairness.
@@ -258,12 +260,12 @@ by the GIL.
 
 | Implementation | Producers / shards | Events/s processed | Append p50 µs | Append p99 µs | Append p99.9 µs | Peak MB | Lost |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| C++ | 1 / 1 | 31,543,436 | 0.04 | 0.08 | 0.08 | 10 | 0 |
-| Python | 1 / 1 | 634,109 | 0.62 | 0.83 | 4.04 | 24 | 0 |
-| C++ | 4 / 8 | 15,712,094 | 0.04 | 8.21 | 18.04 | 29 | 0 |
-| Python | 4 / 8 | 545,096 | 0.62 | 46.33 | 329.04 | 68 | 0 |
+| C++ | 1 / 1 | 30,003,638 | 0.04 | 0.08 | 0.12 | 11 | 0 |
+| Python | 1 / 1 | 629,151 | 0.62 | 3.75 | 4.42 | 24 | 0 |
+| C++ | 4 / 8 | 13,475,910 | 0.04 | 9.08 | 19.96 | 38 | 0 |
+| Python | 4 / 8 | 532,212 | 0.67 | 59.54 | 377.08 | 68 | 0 |
 
-**C++ is 50× faster with 1 producer and 29× faster with 4 producers on 8 shards.** Append latency is
+**C++ is 48× faster with 1 producer and 25× faster with 4 producers on 8 shards.** Append latency is
 sampled on every 64th event, and includes the clock read.
 
 ### The bottleneck fix: batching consumer wakeups
@@ -274,9 +276,9 @@ handoff system calls. Consumers now wait for 256 events or 5 ms.
 
 | Shards, 4 producers | Wake per event | Batched | Change | p99 before | p99 after |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 16,970,215 | 16,971,651 | none | 16.71 µs | 16.71 µs |
-| 8 | 2,496,504 | 15,905,910 | 6.4× | 28.08 µs | 8.29 µs |
-| 32 | 628,162 | 18,566,489 | 30× | 34.46 µs | 4.92 µs |
+| 1 | 11,809,077 | 12,594,869 | about the same | 17.38 µs | 16.83 µs |
+| 8 | 2,567,352 | 14,476,682 | 5.6× | 28.17 µs | 8.58 µs |
+| 32 | 669,866 | 17,789,862 | 26.6× | 34.04 µs | 5.00 µs |
 
 ### Backpressure with a slow consumer
 
@@ -284,16 +286,16 @@ handoff system calls. Consumers now wait for 256 events or 5 ms.
 
 | Policy | Producer events/s | Consumed | Dropped | Evicted | Appends that blocked | Append p99 µs | Peak MB |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Block | 586,073 | 4,000,000 | 0 | 0 | 2,262 | 16.29 | 6 |
-| Drop newest | 33,556,414 | 95,422 | 3,904,578 | 0 | 0 | 3.08 | 5 |
-| Drop oldest | 32,300,187 | 100,508 | 0 | 3,902,462 | 0 | 3.42 | 5 |
+| Block | 592,430 | 4,000,000 | 0 | 0 | 2,085 | 9.71 | 7 |
+| Drop newest | 32,392,424 | 107,647 | 3,892,353 | 0 | 0 | 3.08 | 6 |
+| Drop oldest | 29,253,051 | 108,662 | 0 | 3,895,428 | 0 | 3.38 | 6 |
 
-Memory stays at 5 to 6 MB under each policy, and every event is accounted for.
+Memory stays at 6 to 7 MB under each policy, and every event is accounted for.
 
 ### Cost on the request path
 
-Recording one event per request costs nothing measurable at 16 connections: 36,044 requests/s without
-it and 36,195 with it, a difference within noise.
+Recording one event per request costs nothing measurable at 16 connections: 37,812 requests/s without
+it and 37,874 with it, a difference within noise.
 
 ### Durability cost
 
@@ -302,11 +304,11 @@ it and 36,195 with it, a difference within noise.
 
 | Policy | Events/s | Append p50 µs | Append p99 µs | Append p99.9 µs |
 | --- | --- | --- | --- | --- |
-| Sync every append | 459 | 8,448 | 17,975 | 25,067 |
-| Sync every 10 ms | 2,857 | 104 | 9,024 | 12,856 |
-| OS decides | 166,665 | 23 | 52 | 97 |
+| Sync every append | 550 | 6,984 | 15,981 | 18,014 |
+| Sync every 10 ms | 4,807 | 63 | 6,332 | 11,906 |
+| OS decides | 167,819 | 23 | 50 | 72 |
 
-Compare about 15.7M events/s in memory. An earlier version synced on the same thread that acknowledged
+Compare about 13.5M events/s in memory. An earlier version synced on the same thread that acknowledged
 appends, which held the interval policy to 1,147 events/s.
 
 `tests/integration/wal_crash_test.py` kills a writer with SIGKILL 12 times at random moments, and
@@ -321,11 +323,11 @@ Single thread, 1000 keys, median of 3 runs of `bench/stream_ops_bench.cpp`.
 
 | Operation | Events/s |
 | --- | --- |
-| Append | 62,091,393 |
-| Idempotent append | 43,672,148 |
-| Tumbling window | 44,621,415 |
-| Sliding window, 6 overlapping panes | 43,544,551 |
-| Interval join | 11,442,806 |
+| Append | 60,951,762 |
+| Idempotent append | 43,895,320 |
+| Tumbling window | 46,184,339 |
+| Sliding window, 6 overlapping panes | 44,159,805 |
+| Interval join | 11,753,884 |
 
 ### Exactly-once processing
 
@@ -342,26 +344,26 @@ scaling, not what a real cluster would do.** "Direct" means no router.
 
 | Workload | Config | Requests/s | p50 ms | p99 ms | Node cores | Router cores | Client cores |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Light | Direct | 32,870 | 1.50 | 6.70 | 5.6 | 0 | 5.2 |
-| Light | 1 node | 20,493 | 2.86 | 7.78 | 2.7 | 5.7 | 2.1 |
-| Light | 2 nodes | 21,439 | 2.71 | 7.62 | 2.6 | 6.1 | 2.0 |
-| Light | 3 nodes | 21,724 | 2.68 | 8.20 | 2.6 | 6.1 | 1.9 |
-| Light | 4 nodes | 21,650 | 2.51 | 9.02 | 2.6 | 6.0 | 2.0 |
-| Heavy | Direct | 7,788 | 4.16 | 4.26 | 1.5 | 0 | 0.2 |
-| Heavy | 1 node | 8,370 | 3.78 | 4.15 | 1.5 | 0.8 | 0.6 |
-| Heavy | 2 nodes | 15,942 | 2.14 | 3.07 | 3.9 | 2.6 | 1.2 |
-| Heavy | 3 nodes | 17,620 | 1.44 | 6.53 | 4.8 | 3.6 | 1.5 |
-| Heavy | 4 nodes | 18,258 | 1.15 | 12.40 | 4.9 | 3.9 | 1.5 |
-| XL | Direct | 2,316 | 13.67 | 14.56 | 1.2 | 0 | 0.1 |
-| XL | 1 node | 2,294 | 13.72 | 15.07 | 1.2 | 0.4 | 0.4 |
-| XL | 2 nodes | 4,242 | 8.63 | 11.45 | 2.4 | 0.3 | 0.2 |
-| XL | 3 nodes | 4,717 | 7.00 | 11.97 | 3.5 | 0.4 | 0.2 |
-| XL | 4 nodes | 5,092 | 6.78 | 10.60 | 4.7 | 0.6 | 0.3 |
+| Light | Direct | 35,745 | 1.43 | 5.61 | 4.8 | 0 | 4.2 |
+| Light | 1 node | 22,750 | 2.78 | 5.51 | 2.6 | 4.6 | 1.8 |
+| Light | 2 nodes | 23,772 | 2.63 | 5.20 | 2.5 | 4.7 | 1.8 |
+| Light | 3 nodes | 23,548 | 2.61 | 5.58 | 2.5 | 4.8 | 1.9 |
+| Light | 4 nodes | 23,316 | 2.66 | 5.96 | 2.4 | 4.4 | 1.8 |
+| Heavy | Direct | 7,810 | 4.17 | 4.31 | 1.5 | 0 | 0.2 |
+| Heavy | 1 node | 8,337 | 3.80 | 4.16 | 1.6 | 0.6 | 0.3 |
+| Heavy | 2 nodes | 15,854 | 2.09 | 3.17 | 3.8 | 2.5 | 1.2 |
+| Heavy | 3 nodes | 16,977 | 1.57 | 5.91 | 4.5 | 3.1 | 1.4 |
+| Heavy | 4 nodes | 17,392 | 1.08 | 13.28 | 4.4 | 3.0 | 1.3 |
+| XL | Direct | 2,331 | 13.58 | 14.90 | 1.2 | 0 | 0.1 |
+| XL | 1 node | 2,337 | 13.55 | 15.42 | 1.2 | 0.2 | 0.1 |
+| XL | 2 nodes | 4,142 | 8.45 | 11.83 | 2.4 | 0.3 | 0.2 |
+| XL | 3 nodes | 4,663 | 7.09 | 10.55 | 3.5 | 0.4 | 0.2 |
+| XL | 4 nodes | 4,884 | 6.90 | 12.43 | 4.6 | 0.6 | 0.3 |
 
 ![Cluster scaling relative to one node](charts/cluster_scaling.svg)
 
-Scaling from 1 to 4 nodes reaches 1.06× for light, 2.18× for heavy, and 2.22× for XL. No requests failed
-in any run. Scaling is close to linear from 1 to 2 nodes on the heavy and XL workloads (1.90× and 1.85×),
+Scaling from 1 to 4 nodes reaches 1.02× for light, 2.09× for heavy, and 2.09× for XL. No requests failed
+in any run. Scaling is close to linear from 1 to 2 nodes on the heavy and XL workloads (1.90× and 1.77×),
 and flattens after that.
 
 ### Where scaling stops, and why
@@ -375,35 +377,36 @@ bench/run_hardware_contention.py   runs inference alone, with no networking
 
 | Test at 4 nodes | Light requests/s | Heavy requests/s |
 | --- | --- | --- |
-| 1 router, baseline | 21,656 | 18,285 |
-| 2 routers | 25,128 (+16%) | 19,247 (+5%) |
-| 3 routers | 24,746 | 18,484 |
-| 3 or 4× the connections, spreading keys more evenly | 19,979 | 16,694 |
+| 1 router, baseline | 23,693 | 17,690 |
+| 2 routers | 27,220 (+15%) | 18,258 (+3%) |
+| 3 routers | 27,847 (+18%) | 18,417 (+4%) |
+| 3 or 4× the connections, spreading keys more evenly | 22,872 | 15,868 |
 
 ![Inference alone with no networking](charts/hardware_contention.svg)
 
 | Processes, inference only | Light | Heavy | XL |
 | --- | --- | --- | --- |
 | 1 | 1.00× | 1.00× | 1.00× |
-| 2 | 1.99× | 1.96× | 2.01× |
-| 3 | 2.91× | 2.97× | 2.28× |
-| 4 | 3.85× | 3.91× | 2.48× |
-| 6 | 5.81× | 4.23× | 2.44× |
-| 8 | 7.67× | 3.47× | 2.50× |
+| 2 | 1.96× | 1.95× | 1.99× |
+| 3 | 2.85× | 2.97× | 2.12× |
+| 4 | 3.81× | 3.92× | 2.41× |
+| 6 | 5.79× | 4.45× | 2.43× |
+| 8 | 7.63× | 4.61× | 2.44× |
 
-**Light stops at the router and at machine CPU.** Going through the router drops throughput 38%, since
-each request gains socket round trips, and it uses more than twice the CPU of all nodes combined. A second
-router adds 16%, then a third adds nothing. All processes together use about 10.6 of 12 cores.
+**Light stops at the router's per-request cost.** Going through the router drops throughput 36%, since each
+request gains socket round trips, and it uses about twice the CPU of all the nodes combined. Further routers add
+15% and then 18%, not the doubling that would mean the router was the only limit. All processes together use about
+8.7 of 12 cores, which is about what this machine's 8 performance cores can give.
 
-**Heavy stops at machine CPU taken up by the HTTP path.** The model alone scales to 3.91× at 4 processes,
-so inference is not the limit. A second router adds only 5%, and all processes use about 10.3 of 12 cores.
+**Heavy stops at the CPU taken by the HTTP path.** The model alone scales to 3.92× at 4 processes, so inference is not the
+limit. More routers add at most 4%, and all processes use about 8.8 of 12 cores.
 
-**XL stops at shared hardware.** Keys are balanced within 0.5% and the router uses about 0.6 cores, and
-about 5.7 of 12 cores are busy, so software and CPU are both ruled out. With no networking at all,
-inference alone stalls at about 2.5×, while the light model reaches 7.67×. The most likely cause is
-memory bandwidth: 21 MB of weights at about 5,800 inferences/s is about 120 GB/s. **That figure is an
-estimate. Bandwidth and cache misses were not measured directly.** The heavy model's stall beyond 4
-processes may be a cache limit or the efficiency cores, and was not investigated.
+**XL stops at shared hardware.** Keys are balanced within 1% and the router uses about 0.6 cores, and only about
+5.5 of 12 cores are busy, so software and CPU are both ruled out. With no networking at all, inference alone stalls at
+about 2.4×, while the light model reaches 7.63×. The most likely cause is memory bandwidth: 21 MB of weights at about
+5,795 inferences/s is about 122 GB/s. **That figure is an estimate. Bandwidth and cache misses were not measured
+directly.** The heavy model's stall beyond 4 processes may be a cache limit or the efficiency cores, and was not
+investigated.
 
 **Ruled out: uneven key placement.** Spreading keys more evenly with more connections made throughput
 slightly lower, not higher.
@@ -421,14 +424,14 @@ others 4.
 
 | Scenario | Policy | Requests/s | p50 ms | p99 ms | p99.9 ms |
 | --- | --- | --- | --- | --- | --- |
-| Equal nodes | Consistent hash | 16,863 | 1.04 | 11.85 | 119.19 |
-| Equal nodes | Least loaded | 18,081 | 1.01 | 12.32 | 121.12 |
-| One slow | Consistent hash | 17,277 | 1.26 | 13.15 | 55.40 |
-| One slow | Least loaded | 17,177 | 1.19 | 16.43 | 53.09 |
+| Equal nodes | Consistent hash | 18,632 | 1.20 | 7.22 | 107.71 |
+| Equal nodes | Least loaded | 18,602 | 1.00 | 10.69 | 125.43 |
+| One slow | Consistent hash | 18,270 | 1.17 | 7.54 | 89.48 |
+| One slow | Least loaded | 18,395 | 1.04 | 10.92 | 78.38 |
 
-**Least-loaded routing made no clear difference here**, and the slow node's share only fell from 26% to 23%. This
+**Least-loaded routing made no clear difference here**, and the slow node's share only fell from 22% to 20%. This
 model's 107 µs of compute is small next to the router's own cost, so a node with fewer workers is barely slower
-as seen by a client. These tails also come from a machine near CPU saturation. This does not show the policy is
+as seen by a client. This does not show the policy is
 useless, only that this setup cannot show a benefit.
 
 ### Fault injection
@@ -500,12 +503,12 @@ Writes through the leader, 3 nodes, 100-byte commands, median of 3 runs:
 
 | fsync | Connections | Writes/s | p50 ms | p99 ms |
 | --- | --- | --- | --- | --- |
-| No | 1 | 3,456 | 0.29 | 0.38 |
-| No | 16 | 19,408 | 0.80 | 1.19 |
-| No | 64 | 24,297 | 2.58 | 3.93 |
-| Yes | 1 | 155 | 6.24 | 10.95 |
-| Yes | 16 | 701 | 22.66 | 34.90 |
-| Yes | 64 | 2,697 | 23.27 | 37.33 |
+| No | 1 | 3,447 | 0.29 | 0.41 |
+| No | 16 | 19,972 | 0.78 | 1.06 |
+| No | 64 | 25,753 | 2.41 | 3.67 |
+| Yes | 1 | 173 | 5.79 | 10.15 |
+| Yes | 16 | 700 | 22.99 | 35.15 |
+| Yes | 64 | 2,558 | 25.03 | 37.17 |
 
 No write failed in these runs. All three nodes share one machine and disk, over loopback, so a real cluster would
 add network latency to every commit. Concurrent writes share one sync through group commit, which is why synced
@@ -513,7 +516,7 @@ throughput rises so much with connections.
 
 The first version resent everything unacknowledged with every write. Correctness tests passed, but under load this
 flooded the network until followers started elections, and throughput with 16 connections fell to 13 writes/s.
-Pipelining fixed it, at 19,408 writes/s for the same setup.
+Pipelining fixed it, at 19,972 writes/s for the same setup.
 
 **Not implemented:** log compaction, so the log grows without bound, and changing cluster membership while running.
 This replicated log is also a separate service, and is not wired into the event log or the model registry.
@@ -527,28 +530,29 @@ Single-threaded, `-O3`. Our kernels and Eigen run with random weights in the sam
 
 | Implementation | GFLOPS | Time µs | Gap to Eigen |
 | --- | --- | --- | --- |
-| Scalar, vectorization disabled | 8.7 | 3,842 | 8.8× |
-| Compiler auto-vectorized | 27.9 | 1,203 | 2.8× |
-| NEON, 4 rows of `b` per pass | 35.1 | 956 | 2.2× |
-| NEON micro-kernel, 4 × 12 in registers | 55.7 | 602 | 1.4× |
-| Eigen 3.4 | 76.8 | 437 | none |
+| Scalar, vectorization disabled | 8.7 | 3,843 | 8.8× |
+| Compiler auto-vectorized | 27.9 | 1,203 | 2.7× |
+| NEON, 4 rows of `b` per pass | 35.2 | 953 | 2.2× |
+| NEON micro-kernel, 4 × 12 in registers | 56.0 | 599 | 1.4× |
+| NEON micro-kernel with packing and cache blocking | 63.6 | 527 | 1.2× |
+| Eigen 3.4 | 76.5 | 439 | none |
 
 ### Full forward pass, µs per call
 
 | Batch | Ours, NEON micro | Ours, auto-vectorized | Eigen | ONNX Runtime |
 | --- | --- | --- | --- | --- |
-| 1 | 5.3 | 7.0 | 5.2 | 7.6 |
-| 8 | 27.1 | 54.6 | 27.4 | 16.1 |
-| 64 | 213.2 | 432.3 | 156.9 | 114.2 |
-| 256 | 856.3 | 1729.3 | 600.9 | 441.4 |
+| 1 | 5.3 | 7.0 | 5.1 | 7.7 |
+| 8 | 27.0 | 54.4 | 28.5 | 16.2 |
+| 64 | 219.2 | 430.9 | 157.4 | 113.2 |
+| 256 | 853.4 | 1767.1 | 629.5 | 441.0 |
 
 Fitting `time = overhead + cost per row × batch` from batches 1 and 256:
 
 | Implementation | Overhead per call µs | Cost per row µs |
 | --- | --- | --- |
-| ONNX Runtime | 5.88 | 1.70 |
-| Eigen | 2.90 | 2.34 |
-| Ours, NEON micro | 1.95 | 3.34 |
+| ONNX Runtime | 5.97 | 1.70 |
+| Eigen | 2.68 | 2.45 |
+| Ours, NEON micro | 1.95 | 3.33 |
 
 The micro-kernel's fit is rough: a single row cannot use the 4-row path, so batch 1 runs different code.
 
@@ -568,9 +572,9 @@ would make batches slower.
 
 ### Arena allocator
 
-In isolation, the arena is 5.4× faster: 64 allocations take 453 ns, against 2,437 ns with `malloc`.
-**On the server it makes no measurable difference**: 35,587 requests/s without it and 35,691 with it, with
-overlapping ranges. Only one buffer per batch came from it, so it is off by default. A profile would have
+In isolation, the arena is 5.3× faster: 64 allocations take 455 ns, against 2,412 ns with `malloc`.
+**On the server it makes little difference**: 37,429 requests/s without it and 38,122 with it, about 2%, which is
+small enough that one run cannot separate it from noise. Only one buffer per batch came from it, so it is off by default. A profile would have
 predicted this, and the plan's condition of optimizing where profiling shows it matters did not hold here.
 
 ### AVX2
@@ -580,8 +584,8 @@ Phase 4 assumed AVX2, and NEON took its place here.
 
 ### Packed kernel
 
-Adding packing and cache blocking to the micro-kernel raised 256 × 256 × 256 multiplication from about 55 to about
-62.5 GFLOPS, which narrows the gap to Eigen's 76 from 1.4× to 1.2×. **So packing explains part of that gap, and not
+Adding packing and cache blocking to the micro-kernel raised 256 × 256 × 256 multiplication from about 56 to about
+63.6 GFLOPS, which narrows the gap to Eigen's 76 from 1.4× to 1.2×. **So packing explains part of that gap, and not
 all of it.** It also has a cost: a single-row forward pass went from about 5 to 16 µs, since copying costs more than it
 saves on small inputs. Run `bench/run_kernels_bench.py` for the full table.
 
@@ -591,10 +595,10 @@ Items per second, handing over small integers, spinning when full or empty.
 
 | Producer and consumer pairs | Mutex queue | Lock-free queue | Lock-free relative |
 | --- | --- | --- | --- |
-| 1 | 19.09M | 117.80M | 6.17× |
-| 2 | 9.52M | 13.68M | 1.44× |
-| 4 | 12.66M | 3.84M | 0.30× |
-| 8 | 12.71M | 2.07M | 0.16× |
+| 1 | 19.16M | 98.08M | 5.12× |
+| 2 | 9.74M | 13.58M | 1.39× |
+| 4 | 12.29M | 3.77M | 0.31× |
+| 8 | 13.29M | 2.39M | 0.18× |
 
 **The lock-free queue is much faster with one pair, and much slower under contention**, on this machine, when threads
 outnumber performance cores and spin. That also supports what the engine does: it keeps the mutex queue, which also
@@ -628,11 +632,11 @@ to test.
 
 | Tracing, 16 connections | Requests/s (range) | p50 ms |
 | --- | --- | --- |
-| Off | 35,615 (35,144 to 36,006) | 0.416 |
-| 1 in 100 | 36,057 (35,573 to 36,496) | 0.414 |
-| Every request | 35,068 (34,281 to 35,505) | 0.418 |
+| Off | 37,614 (36,904 to 38,255) | 0.395 |
+| 1 in 100 | 37,276 (34,492 to 37,378) | 0.411 |
+| Every request | 37,044 (36,834 to 37,737) | 0.392 |
 
-Sampling 1 in 100 has no measurable cost, and tracing every request costs about 1.5%.
+Both costs are small and within the spread of the runs: 0.9% at 1 in 100, and 1.5% for every request.
 
 ### Authentication cost
 
@@ -640,8 +644,8 @@ API key checks, 16 connections, median of 5 interleaved runs:
 
 | API keys | Requests/s (range) | p50 ms | p99 ms |
 | --- | --- | --- | --- |
-| Off | 35,725 (35,199 to 38,124) | 0.408 | 1.042 |
-| On | 35,970 (35,253 to 36,870) | 0.412 | 1.016 |
+| Off | 37,424 (36,450 to 37,669) | 0.393 | 1.008 |
+| On | 37,557 (36,821 to 37,725) | 0.386 | 1.037 |
 
 TLS's cost was not measured, since the load generator does not speak HTTPS.
 
@@ -659,6 +663,6 @@ traffic moves to the others, healthy backends drop from 3 to 2 and recover, fail
 python3 -m venv .venv && .venv/bin/pip install onnx onnxruntime numpy
 .venv/bin/python tools/make_bench_model.py   # Needed once: the XL model is too large to commit.
 cmake --preset release && cmake --build --preset release
-python3 bench/run_all.py                     # About 30 minutes, on an otherwise idle machine.
+python3 bench/run_all.py                     # About an hour, and it waits if the machine is busy.
 python3 bench/plot_results.py
 ```

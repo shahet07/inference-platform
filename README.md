@@ -15,12 +15,16 @@ model. [Read the caveats](docs/benchmarks.md#read-this-first) before quoting the
 
 | What | Result |
 | --- | --- |
-| Inference server, 16 connections | 36,741 requests/s at p99 1.01 ms |
-| Removing the batch wait, found through metrics | 3.5× throughput, p50 from 1.67 to 0.41 ms |
-| Streaming engine, 4 producers on 8 shards | 15.7M events/s at append p99 8.2 µs, 29× a Python baseline |
-| Batching consumer wakeups, 8 shards | 6.4× throughput, p99 from 28 to 8.3 µs |
-| Cluster, 1 to 4 nodes on one machine | 2.2× at best, with the cause identified for each workload |
+| Inference server, 16 connections | 35,767 requests/s at p99 1.42 ms; 48,831 on the event-driven frontend |
+| Removing the batch wait, found through metrics | 3.5× throughput, p50 from 1.72 to 0.38 ms |
+| Streaming engine, 4 producers on 8 shards | 13.5M events/s at append p99 9.1 µs, 25× a Python baseline |
+| Batching consumer wakeups, 8 shards | 5.6× throughput, p99 from 28 to 8.6 µs |
+| Cluster, 1 to 4 nodes on one machine | 2.1× at best, with the cause identified for each workload |
 | Killing 1 of 3 nodes under test | No failed requests; only that node's keys moved |
+| Exactly-once under repeated `kill -9` | 150,000 events, every total exact |
+| Raft, 3 nodes, leader killed under load | No acknowledged write lost, about 100 to 300 ms to resume; 25,753 writes/s without fsync |
+| Real model, MobileNetV2 | Raw floats 19× faster than JSON; Core ML about 18× faster than CPU on the float version |
+| Streaming a real tiny LLM, continuous batching | First-token p99 about 19× better than static batching at 240 requests/s |
 
 ## Layout
 

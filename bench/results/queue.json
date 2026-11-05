@@ -1,22 +1,22 @@
 [
   {
-    "lock_free_items_per_sec": 117803335.34227288,
-    "mutex_items_per_sec": 19093336.95190255,
+    "lock_free_items_per_sec": 98078629.83369493,
+    "mutex_items_per_sec": 19159059.037397478,
     "producers_and_consumers": 1
   },
   {
-    "lock_free_items_per_sec": 13683615.85977671,
-    "mutex_items_per_sec": 9521630.793319616,
+    "lock_free_items_per_sec": 13583409.563144812,
+    "mutex_items_per_sec": 9741124.051536888,
     "producers_and_consumers": 2
   },
   {
-    "lock_free_items_per_sec": 3842563.7591549186,
-    "mutex_items_per_sec": 12656407.1478344,
+    "lock_free_items_per_sec": 3769345.2812155387,
+    "mutex_items_per_sec": 12287885.955835534,
     "producers_and_consumers": 4
   },
   {
-    "lock_free_items_per_sec": 2073017.394687145,
-    "mutex_items_per_sec": 12705292.210802238,
+    "lock_free_items_per_sec": 2389341.3277763235,
+    "mutex_items_per_sec": 13290278.369033651,
     "producers_and_consumers": 8
   }
 ]

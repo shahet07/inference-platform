@@ -1,216 +1,216 @@
 {
   "baseline": {
-    "median_rps": 29958.125,
-    "median_p50_ms": 1.967417,
-    "median_p99_ms": 6.013375,
+    "median_rps": 28768.25,
+    "median_p50_ms": 1.962209,
+    "median_p99_ms": 7.179958,
     "runs": [
       {
-        "client_cpu_seconds": 45.563217,
+        "client_cpu_seconds": 47.037347,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 244423,
-        "p50_ms": 2.006208,
-        "p999_ms": 10.445583,
-        "p99_ms": 5.19125,
+        "ok": 230146,
+        "p50_ms": 1.971375,
+        "p999_ms": 15.25725,
+        "p99_ms": 7.427417,
         "rejected": 0,
-        "throughput_rps": 30552.875
+        "throughput_rps": 28768.25
       },
       {
-        "client_cpu_seconds": 50.332187999999995,
+        "client_cpu_seconds": 45.116185,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 239665,
-        "p50_ms": 1.859625,
-        "p999_ms": 11.329209,
-        "p99_ms": 6.013375,
+        "ok": 227514,
+        "p50_ms": 1.962209,
+        "p999_ms": 18.625042,
+        "p99_ms": 7.179958,
         "rejected": 0,
-        "throughput_rps": 29958.125
+        "throughput_rps": 28439.25
       },
       {
-        "client_cpu_seconds": 52.536787,
+        "client_cpu_seconds": 44.77419,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 238433,
-        "p50_ms": 1.967417,
-        "p999_ms": 15.06525,
-        "p99_ms": 6.125667,
+        "ok": 237214,
+        "p50_ms": 1.95175,
+        "p999_ms": 16.866625,
+        "p99_ms": 6.120542,
         "rejected": 0,
-        "throughput_rps": 29804.125
+        "throughput_rps": 29651.75
       }
     ]
   },
   "nodelay_server_only": {
-    "median_rps": 31448.125,
-    "median_p50_ms": 1.883625,
-    "median_p99_ms": 5.599834,
+    "median_rps": 29863.125,
+    "median_p50_ms": 1.88975,
+    "median_p99_ms": 6.743666,
     "runs": [
       {
-        "client_cpu_seconds": 41.977336,
+        "client_cpu_seconds": 42.797635,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 251585,
-        "p50_ms": 1.878167,
-        "p999_ms": 9.94575,
-        "p99_ms": 5.479292,
+        "ok": 239968,
+        "p50_ms": 1.88975,
+        "p999_ms": 15.034917,
+        "p99_ms": 6.487125,
         "rejected": 0,
-        "throughput_rps": 31448.125
+        "throughput_rps": 29996.0
       },
       {
-        "client_cpu_seconds": 41.230152000000004,
+        "client_cpu_seconds": 41.948021,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 251811,
-        "p50_ms": 1.883625,
-        "p999_ms": 9.668708,
-        "p99_ms": 5.599834,
+        "ok": 238905,
+        "p50_ms": 1.8625,
+        "p999_ms": 17.743417,
+        "p99_ms": 6.743666,
         "rejected": 0,
-        "throughput_rps": 31476.375
+        "throughput_rps": 29863.125
       },
       {
-        "client_cpu_seconds": 43.485362,
+        "client_cpu_seconds": 42.564375,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 243990,
-        "p50_ms": 1.93275,
-        "p999_ms": 10.764459,
-        "p99_ms": 5.666334,
+        "ok": 234472,
+        "p50_ms": 1.915459,
+        "p999_ms": 17.350125,
+        "p99_ms": 7.223416,
         "rejected": 0,
-        "throughput_rps": 30498.75
+        "throughput_rps": 29309.0
       }
     ]
   },
   "nodelay_both": {
-    "median_rps": 31290.375,
-    "median_p50_ms": 1.902459,
-    "median_p99_ms": 5.51025,
+    "median_rps": 29760.75,
+    "median_p50_ms": 1.890916,
+    "median_p99_ms": 7.163959,
     "runs": [
       {
-        "client_cpu_seconds": 42.052887,
+        "client_cpu_seconds": 43.044278,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 256664,
-        "p50_ms": 1.840125,
-        "p999_ms": 14.245833,
-        "p99_ms": 5.475041,
+        "ok": 238086,
+        "p50_ms": 1.890916,
+        "p999_ms": 19.197625,
+        "p99_ms": 7.163959,
         "rejected": 0,
-        "throughput_rps": 32083.0
+        "throughput_rps": 29760.75
       },
       {
-        "client_cpu_seconds": 44.110710999999995,
+        "client_cpu_seconds": 42.535939,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 240654,
-        "p50_ms": 1.974333,
-        "p999_ms": 11.343959,
-        "p99_ms": 5.810541,
+        "ok": 237903,
+        "p50_ms": 1.787625,
+        "p999_ms": 18.421459,
+        "p99_ms": 7.277708,
         "rejected": 0,
-        "throughput_rps": 30081.75
+        "throughput_rps": 29737.875
       },
       {
-        "client_cpu_seconds": 44.785394,
+        "client_cpu_seconds": 40.364830999999995,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 250323,
-        "p50_ms": 1.902459,
-        "p999_ms": 11.137,
-        "p99_ms": 5.51025,
+        "ok": 242911,
+        "p50_ms": 1.923083,
+        "p999_ms": 13.432417,
+        "p99_ms": 5.990583,
         "rejected": 0,
-        "throughput_rps": 31290.375
+        "throughput_rps": 30363.875
       }
     ]
   },
   "keepalive_only": {
-    "median_rps": 32267.0,
-    "median_p50_ms": 1.436459,
-    "median_p99_ms": 7.369375,
+    "median_rps": 32331.25,
+    "median_p50_ms": 1.439875,
+    "median_p99_ms": 7.795792,
     "runs": [
       {
-        "client_cpu_seconds": 46.9216,
+        "client_cpu_seconds": 44.555998,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 268142,
-        "p50_ms": 1.679541,
-        "p999_ms": 9.771792,
-        "p99_ms": 6.017875,
+        "ok": 258650,
+        "p50_ms": 1.439875,
+        "p999_ms": 17.15975,
+        "p99_ms": 8.030375,
         "rejected": 0,
-        "throughput_rps": 33517.75
+        "throughput_rps": 32331.25
       },
       {
-        "client_cpu_seconds": 50.977272,
+        "client_cpu_seconds": 42.209486,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 256883,
-        "p50_ms": 1.436459,
-        "p999_ms": 13.560167,
-        "p99_ms": 7.369375,
+        "ok": 263057,
+        "p50_ms": 1.479375,
+        "p999_ms": 16.28825,
+        "p99_ms": 6.934417,
         "rejected": 0,
-        "throughput_rps": 32110.375
+        "throughput_rps": 32882.125
       },
       {
-        "client_cpu_seconds": 48.759781,
+        "client_cpu_seconds": 48.121925999999995,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 258136,
-        "p50_ms": 1.434375,
-        "p999_ms": 19.23175,
-        "p99_ms": 7.947833,
+        "ok": 253338,
+        "p50_ms": 1.2405,
+        "p999_ms": 17.35375,
+        "p99_ms": 7.795792,
         "rejected": 0,
-        "throughput_rps": 32267.0
+        "throughput_rps": 31667.25
       }
     ]
   },
   "both_fixes": {
-    "median_rps": 33074.75,
-    "median_p50_ms": 1.520709,
-    "median_p99_ms": 6.869167,
+    "median_rps": 32616.75,
+    "median_p50_ms": 1.436833,
+    "median_p99_ms": 7.230209,
     "runs": [
       {
-        "client_cpu_seconds": 50.577868,
+        "client_cpu_seconds": 46.012456,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 261447,
-        "p50_ms": 1.483041,
-        "p999_ms": 12.362833,
-        "p99_ms": 6.869167,
+        "ok": 260934,
+        "p50_ms": 1.436833,
+        "p999_ms": 14.826792,
+        "p99_ms": 7.230209,
         "rejected": 0,
-        "throughput_rps": 32680.875
+        "throughput_rps": 32616.75
       },
       {
-        "client_cpu_seconds": 49.633408,
+        "client_cpu_seconds": 39.037342,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 264598,
-        "p50_ms": 1.52075,
-        "p999_ms": 19.0035,
-        "p99_ms": 7.451667,
+        "ok": 275487,
+        "p50_ms": 1.464417,
+        "p999_ms": 14.752583,
+        "p99_ms": 6.445708,
         "rejected": 0,
-        "throughput_rps": 33074.75
+        "throughput_rps": 34435.875
       },
       {
-        "client_cpu_seconds": 49.526057,
+        "client_cpu_seconds": 48.412803000000004,
         "connections": 64,
         "errors": 0,
         "offered_rate": 0.0,
-        "ok": 267402,
-        "p50_ms": 1.520709,
-        "p999_ms": 13.247959,
-        "p99_ms": 6.609583,
+        "ok": 255630,
+        "p50_ms": 1.376625,
+        "p999_ms": 17.037542,
+        "p99_ms": 7.377083,
         "rejected": 0,
-        "throughput_rps": 33425.25
+        "throughput_rps": 31953.75
       }
     ]
   }

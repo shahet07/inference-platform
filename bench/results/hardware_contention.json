@@ -2,133 +2,133 @@
   "small": [
     {
       "processes": 1,
-      "total_per_sec": 186593.77975714198,
-      "per_process_per_sec": 186593.77975714198,
-      "us_per_inference": 5.35923545415894,
+      "total_per_sec": 188247.13987802257,
+      "per_process_per_sec": 188247.13987802257,
+      "us_per_inference": 5.312165702214463,
       "scaling": 1.0
     },
     {
       "processes": 2,
-      "total_per_sec": 370446.9553787606,
-      "per_process_per_sec": 185223.4776893803,
-      "us_per_inference": 5.3988836214219,
-      "scaling": 1.9853124571510885
+      "total_per_sec": 368969.2510196996,
+      "per_process_per_sec": 184484.6255098498,
+      "us_per_inference": 5.420505894387438,
+      "scaling": 1.960025800438607
     },
     {
       "processes": 3,
-      "total_per_sec": 542675.7361293543,
-      "per_process_per_sec": 180891.91204311812,
-      "us_per_inference": 5.528163137341575,
-      "scaling": 2.9083270451762373
+      "total_per_sec": 536867.5119616027,
+      "per_process_per_sec": 178955.83732053425,
+      "us_per_inference": 5.587970836675554,
+      "scaling": 2.851929183675639
     },
     {
       "processes": 4,
-      "total_per_sec": 718331.4651981838,
-      "per_process_per_sec": 179582.86629954595,
-      "us_per_inference": 5.56845995726558,
-      "scaling": 3.849707456128045
+      "total_per_sec": 718100.4640051102,
+      "per_process_per_sec": 179525.11600127755,
+      "us_per_inference": 5.570251239903857,
+      "scaling": 3.814668655632238
     },
     {
       "processes": 6,
-      "total_per_sec": 1084090.0425248593,
-      "per_process_per_sec": 180681.6737541432,
-      "us_per_inference": 5.534595619037257,
-      "scaling": 5.809893791399899
+      "total_per_sec": 1090301.5013430952,
+      "per_process_per_sec": 181716.91689051586,
+      "us_per_inference": 5.503064971119328,
+      "scaling": 5.791862240507727
     },
     {
       "processes": 8,
-      "total_per_sec": 1430887.9347686379,
-      "per_process_per_sec": 178860.99184607973,
-      "us_per_inference": 5.590933996723881,
-      "scaling": 7.668465350940348
+      "total_per_sec": 1435898.8701014821,
+      "per_process_per_sec": 179487.35876268527,
+      "us_per_inference": 5.571423006576083,
+      "scaling": 7.627732729601593
     }
   ],
   "heavy": [
     {
       "processes": 1,
-      "total_per_sec": 9351.546265508498,
-      "per_process_per_sec": 9351.546265508498,
-      "us_per_inference": 106.93418731063983,
+      "total_per_sec": 9332.21149509079,
+      "per_process_per_sec": 9332.21149509079,
+      "us_per_inference": 107.1557369361003,
       "scaling": 1.0
     },
     {
       "processes": 2,
-      "total_per_sec": 18335.45655182404,
-      "per_process_per_sec": 9167.72827591202,
-      "us_per_inference": 109.07827652652787,
-      "scaling": 1.9606871453388501
+      "total_per_sec": 18211.606922892533,
+      "per_process_per_sec": 9105.803461446267,
+      "us_per_inference": 109.8200729055897,
+      "scaling": 1.9514781606131353
     },
     {
       "processes": 3,
-      "total_per_sec": 27780.912384831398,
-      "per_process_per_sec": 9260.304128277132,
-      "us_per_inference": 107.98781402291252,
-      "scaling": 2.9707292886200345
+      "total_per_sec": 27746.556737692656,
+      "per_process_per_sec": 9248.852245897551,
+      "us_per_inference": 108.12152399164587,
+      "scaling": 2.9732027346667755
     },
     {
       "processes": 4,
-      "total_per_sec": 36572.23153417465,
-      "per_process_per_sec": 9143.057883543663,
-      "us_per_inference": 109.37259861384804,
-      "scaling": 3.9108218572435205
+      "total_per_sec": 36587.96934241855,
+      "per_process_per_sec": 9146.992335604638,
+      "us_per_inference": 109.32555350544061,
+      "scaling": 3.920610817882305
     },
     {
       "processes": 6,
-      "total_per_sec": 39516.39544754334,
-      "per_process_per_sec": 6586.06590792389,
-      "us_per_inference": 151.8357110269532,
-      "scaling": 4.225653632628915
+      "total_per_sec": 41489.98819762754,
+      "per_process_per_sec": 6914.998032937924,
+      "us_per_inference": 144.61320093465557,
+      "scaling": 4.445890260786883
     },
     {
       "processes": 8,
-      "total_per_sec": 32473.52164505244,
-      "per_process_per_sec": 4059.190205631555,
-      "us_per_inference": 246.3545557960405,
-      "scaling": 3.4725296462281543
+      "total_per_sec": 42981.23519072808,
+      "per_process_per_sec": 5372.65439884101,
+      "us_per_inference": 186.12773608064575,
+      "scaling": 4.605685931286315
     }
   ],
   "xl": [
     {
       "processes": 1,
-      "total_per_sec": 2348.1763968774753,
-      "per_process_per_sec": 2348.1763968774753,
-      "us_per_inference": 425.8623846699787,
+      "total_per_sec": 2376.660229878544,
+      "per_process_per_sec": 2376.660229878544,
+      "us_per_inference": 420.7585028050491,
       "scaling": 1.0
     },
     {
       "processes": 2,
-      "total_per_sec": 4725.004430958041,
-      "per_process_per_sec": 2362.5022154790204,
-      "us_per_inference": 423.2800263415796,
-      "scaling": 2.012201654544007
+      "total_per_sec": 4719.896641312762,
+      "per_process_per_sec": 2359.948320656381,
+      "us_per_inference": 423.73809258749634,
+      "scaling": 1.9859366441933373
     },
     {
       "processes": 3,
-      "total_per_sec": 5344.458748981607,
-      "per_process_per_sec": 1781.4862496605356,
-      "us_per_inference": 561.3290589195125,
-      "scaling": 2.2760039476116383
+      "total_per_sec": 5044.5488788488565,
+      "per_process_per_sec": 1681.516292949619,
+      "us_per_inference": 594.7013443716669,
+      "scaling": 2.1225368335913335
     },
     {
       "processes": 4,
-      "total_per_sec": 5820.565849603542,
-      "per_process_per_sec": 1455.1414624008855,
-      "us_per_inference": 687.2184085457006,
-      "scaling": 2.478760052840805
+      "total_per_sec": 5734.978936331503,
+      "per_process_per_sec": 1433.7447340828758,
+      "us_per_inference": 697.4742269164605,
+      "scaling": 2.413041150869336
     },
     {
       "processes": 6,
-      "total_per_sec": 5740.941735085694,
-      "per_process_per_sec": 956.8236225142823,
-      "us_per_inference": 1045.124698502177,
-      "scaling": 2.444851137554999
+      "total_per_sec": 5772.069609969854,
+      "per_process_per_sec": 962.0116016616424,
+      "us_per_inference": 1039.4885033327475,
+      "scaling": 2.4286473671774393
     },
     {
       "processes": 8,
-      "total_per_sec": 5867.156140650708,
-      "per_process_per_sec": 733.3945175813385,
-      "us_per_inference": 1363.5226007659555,
-      "scaling": 2.4986011052886195
+      "total_per_sec": 5794.7194357219405,
+      "per_process_per_sec": 724.3399294652426,
+      "us_per_inference": 1380.5672714167072,
+      "scaling": 2.4381774739496826
     }
   ]
 }

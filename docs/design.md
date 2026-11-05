@@ -48,10 +48,10 @@ authentication on the write itself, which the known gaps below cover.
 reaches the model, so overload does not spend compute on answers no client will read.
 
 **Raw floats as well as JSON.** JSON stays as the easy default, and `application/octet-stream` skips text
-encoding. On a real image model the difference is 18.7×.
+encoding. On a real image model the difference is 19×.
 
-**Core ML is an option, and batching still stays off.** It was about 22× faster than the CPU on float MobileNetV2 in the
-benchmarks here, and batching gave no gain on it there either. A provider is chosen per server, not per model.
+**Core ML is an option, and batching still stays off.** It was about 18× faster than the CPU on float MobileNetV2 in the
+benchmarks here, and batching had no consistent effect on it there. A provider is chosen per server, not per model.
 
 **The engine keeps its mutex queue.** A lock-free queue was built and measured. It is far faster with one producer and
 one consumer and far slower under contention, and it cannot let idle workers sleep.
@@ -243,7 +243,7 @@ is what makes it possible to simulate a whole cluster under hostile conditions, 
 The networked `raft_node` is a thin layer around it, with all Raft work on one thread.
 
 **All appends that arrive together share one write and sync.** With fsync, that group commit is the difference between
-about 155 and 2,697 writes/s.
+about 173 and 2,558 writes/s.
 
 **A client can see an unknown outcome.** If a leader dies after receiving a write, the write may or may not commit, so
 the node returns 503, and a retrying client may add a command twice. Commands would need ids to deduplicate, as the

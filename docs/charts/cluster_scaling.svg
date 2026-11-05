@@ -33,22 +33,22 @@
 <text x="64" y="46">Throughput vs 1 node</text>
 <polyline points="64.0,272.0 232.7,200.0 401.3,128.0 570.0,56.0" fill="none" stroke="var(--ideal)" stroke-width="2" stroke-dasharray="4 5"/>
 <text x="580.0" y="60.0">ideal</text>
-<polyline points="64.0,272.0 232.7,210.9 401.3,196.0 570.0,184.2" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>
+<polyline points="64.0,272.0 232.7,216.4 401.3,200.3 570.0,193.6" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>
 <g><title>XL model, 1: 1.0x</title><circle class="hit" cx="64.0" cy="272.0" r="14"/><circle cx="64.0" cy="272.0" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
-<g><title>XL model, 2: 1.8x</title><circle class="hit" cx="232.7" cy="210.9" r="14"/><circle cx="232.7" cy="210.9" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
-<g><title>XL model, 3: 2.1x</title><circle class="hit" cx="401.3" cy="196.0" r="14"/><circle cx="401.3" cy="196.0" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
-<g><title>XL model, 4: 2.2x</title><circle class="hit" cx="570.0" cy="184.2" r="14"/><circle cx="570.0" cy="184.2" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
-<text class="label" x="580.0" y="188.2">XL model 2.2x</text>
-<polyline points="64.0,272.0 232.7,206.9 401.3,192.4 570.0,186.9" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round"/>
+<g><title>XL model, 2: 1.8x</title><circle class="hit" cx="232.7" cy="216.4" r="14"/><circle cx="232.7" cy="216.4" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>XL model, 3: 2.0x</title><circle class="hit" cx="401.3" cy="200.3" r="14"/><circle cx="401.3" cy="200.3" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>XL model, 4: 2.1x</title><circle class="hit" cx="570.0" cy="193.6" r="14"/><circle cx="570.0" cy="193.6" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
+<text class="label" x="580.0" y="197.6">XL model 2.1x</text>
+<polyline points="64.0,272.0 232.7,207.1 401.3,197.4 570.0,193.8" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round"/>
 <g><title>Heavy model, 1: 1.0x</title><circle class="hit" cx="64.0" cy="272.0" r="14"/><circle cx="64.0" cy="272.0" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
-<g><title>Heavy model, 2: 1.9x</title><circle class="hit" cx="232.7" cy="206.9" r="14"/><circle cx="232.7" cy="206.9" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
-<g><title>Heavy model, 3: 2.1x</title><circle class="hit" cx="401.3" cy="192.4" r="14"/><circle cx="401.3" cy="192.4" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
-<g><title>Heavy model, 4: 2.2x</title><circle class="hit" cx="570.0" cy="186.9" r="14"/><circle cx="570.0" cy="186.9" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
-<text class="label" x="580.0" y="206.2">Heavy model 2.2x</text>
-<polyline points="64.0,272.0 232.7,268.7 401.3,267.7 570.0,267.9" fill="none" stroke="var(--s3)" stroke-width="2" stroke-linejoin="round"/>
+<g><title>Heavy model, 2: 1.9x</title><circle class="hit" cx="232.7" cy="207.1" r="14"/><circle cx="232.7" cy="207.1" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Heavy model, 3: 2.0x</title><circle class="hit" cx="401.3" cy="197.4" r="14"/><circle cx="401.3" cy="197.4" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Heavy model, 4: 2.1x</title><circle class="hit" cx="570.0" cy="193.8" r="14"/><circle cx="570.0" cy="193.8" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
+<text class="label" x="580.0" y="215.6">Heavy model 2.1x</text>
+<polyline points="64.0,272.0 232.7,268.8 401.3,269.5 570.0,270.2" fill="none" stroke="var(--s3)" stroke-width="2" stroke-linejoin="round"/>
 <g><title>Light model, 1: 1.0x</title><circle class="hit" cx="64.0" cy="272.0" r="14"/><circle cx="64.0" cy="272.0" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
-<g><title>Light model, 2: 1.0x</title><circle class="hit" cx="232.7" cy="268.7" r="14"/><circle cx="232.7" cy="268.7" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
-<g><title>Light model, 3: 1.1x</title><circle class="hit" cx="401.3" cy="267.7" r="14"/><circle cx="401.3" cy="267.7" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
-<g><title>Light model, 4: 1.1x</title><circle class="hit" cx="570.0" cy="267.9" r="14"/><circle cx="570.0" cy="267.9" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
-<text class="label" x="580.0" y="271.9">Light model 1.1x</text>
+<g><title>Light model, 2: 1.0x</title><circle class="hit" cx="232.7" cy="268.8" r="14"/><circle cx="232.7" cy="268.8" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Light model, 3: 1.0x</title><circle class="hit" cx="401.3" cy="269.5" r="14"/><circle cx="401.3" cy="269.5" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Light model, 4: 1.0x</title><circle class="hit" cx="570.0" cy="270.2" r="14"/><circle cx="570.0" cy="270.2" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
+<text class="label" x="580.0" y="274.2">Light model 1.0x</text>
 </svg>

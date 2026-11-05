@@ -2,49 +2,49 @@
   {
     "fsync": false,
     "connections": 1,
-    "writes_per_sec": 3455.6,
-    "p50_ms": 0.285917,
-    "p99_ms": 0.375166,
+    "writes_per_sec": 3447.0,
+    "p50_ms": 0.286833,
+    "p99_ms": 0.408333,
     "errors": 0
   },
   {
     "fsync": false,
     "connections": 16,
-    "writes_per_sec": 19407.8,
-    "p50_ms": 0.80475,
-    "p99_ms": 1.189875,
+    "writes_per_sec": 19971.6,
+    "p50_ms": 0.775958,
+    "p99_ms": 1.056333,
     "errors": 0
   },
   {
     "fsync": false,
     "connections": 64,
-    "writes_per_sec": 24297.0,
-    "p50_ms": 2.584,
-    "p99_ms": 3.933917,
+    "writes_per_sec": 25752.8,
+    "p50_ms": 2.412667,
+    "p99_ms": 3.673417,
     "errors": 0
   },
   {
     "fsync": true,
     "connections": 1,
-    "writes_per_sec": 154.6,
-    "p50_ms": 6.244625,
-    "p99_ms": 10.951708,
+    "writes_per_sec": 173.2,
+    "p50_ms": 5.792209,
+    "p99_ms": 10.154625,
     "errors": 0
   },
   {
     "fsync": true,
     "connections": 16,
-    "writes_per_sec": 701.2,
-    "p50_ms": 22.65675,
-    "p99_ms": 34.89575,
+    "writes_per_sec": 700.2,
+    "p50_ms": 22.986,
+    "p99_ms": 35.154166,
     "errors": 0
   },
   {
     "fsync": true,
     "connections": 64,
-    "writes_per_sec": 2697.0,
-    "p50_ms": 23.265583,
-    "p99_ms": 37.325167,
+    "writes_per_sec": 2557.8,
+    "p50_ms": 25.034625,
+    "p99_ms": 37.166291,
     "errors": 0
   }
 ]

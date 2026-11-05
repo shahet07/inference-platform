@@ -1,0 +1,142 @@
+{
+  "run_nodelay_ab.py": {
+    "attempts": 1,
+    "scaling_before": 3.78,
+    "scaling_after": 3.96,
+    "clean": true,
+    "seconds": 155
+  },
+  "run_batch_wait_sweep.py": {
+    "attempts": 1,
+    "scaling_before": 3.87,
+    "scaling_after": 3.93,
+    "clean": true,
+    "seconds": 168
+  },
+  "run_server_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.92,
+    "scaling_after": 3.84,
+    "clean": true,
+    "seconds": 125
+  },
+  "run_frontend_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.91,
+    "scaling_after": 3.81,
+    "clean": true,
+    "seconds": 174
+  },
+  "run_stream_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.82,
+    "scaling_after": 3.87,
+    "clean": true,
+    "seconds": 141
+  },
+  "run_cluster_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.95,
+    "scaling_after": 3.8,
+    "clean": true,
+    "seconds": 374
+  },
+  "run_cluster_bottleneck.py": {
+    "attempts": 1,
+    "scaling_before": 3.79,
+    "scaling_after": 3.88,
+    "clean": true,
+    "seconds": 206
+  },
+  "run_balance_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.94,
+    "scaling_after": 3.84,
+    "clean": true,
+    "seconds": 92
+  },
+  "run_raft_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.81,
+    "scaling_after": 3.84,
+    "clean": true,
+    "seconds": 116
+  },
+  "run_llm_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.81,
+    "scaling_after": 3.87,
+    "clean": true,
+    "seconds": 71
+  },
+  "run_hardware_contention.py": {
+    "attempts": 1,
+    "scaling_before": 3.75,
+    "scaling_after": 3.79,
+    "clean": true,
+    "seconds": 168
+  },
+  "run_wal_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.9,
+    "scaling_after": 3.84,
+    "clean": true,
+    "seconds": 22
+  },
+  "run_real_model_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.89,
+    "scaling_after": 3.86,
+    "clean": true,
+    "seconds": 473
+  },
+  "run_kernels_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.81,
+    "scaling_after": 3.79,
+    "clean": true,
+    "seconds": 15
+  },
+  "run_arena_ab.py": {
+    "attempts": 1,
+    "scaling_before": 3.9,
+    "scaling_after": 3.79,
+    "clean": true,
+    "seconds": 75
+  },
+  "run_queue_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.74,
+    "scaling_after": 3.88,
+    "clean": true,
+    "seconds": 30
+  },
+  "run_tracing_overhead.py": {
+    "attempts": 1,
+    "scaling_before": 3.88,
+    "scaling_after": 3.86,
+    "clean": true,
+    "seconds": 110
+  },
+  "run_auth_overhead.py": {
+    "attempts": 1,
+    "scaling_before": 3.82,
+    "scaling_after": 4.0,
+    "clean": true,
+    "seconds": 65
+  },
+  "run_coreml_bench.py": {
+    "attempts": 1,
+    "scaling_before": 3.78,
+    "scaling_after": 3.82,
+    "clean": true,
+    "seconds": 178
+  },
+  "run_profiles.py": {
+    "attempts": 1,
+    "scaling_before": 3.85,
+    "scaling_after": 3.81,
+    "clean": true,
+    "seconds": 40
+  }
+}
