@@ -88,9 +88,17 @@ struct Router::Impl {
       pools.emplace(backend, std::make_unique<ClientPool>(backend));
     }
     healthy_backends.set(static_cast<std::int64_t>(c.backends.size()));
+  }
+
+  // Called last in the router's constructor, because the monitor's thread can call back at once.
+  void startMonitor() {
+    // Building a client compiles a regex, and libstdc++ fills a shared locale cache the first time
+    // without a lock. Doing it once here means later clients on other threads only read that cache.
+    const httplib::Client prime("http://127.0.0.1:1");
     monitor = std::make_unique<HealthMonitor>(
-        c.backends, probeHealthz,
-        [this](const std::string& node, bool healthy) { onHealthChange(node, healthy); }, c.health);
+        config.backends, probeHealthz,
+        [this](const std::string& node, bool healthy) { onHealthChange(node, healthy); },
+        config.health);
   }
 
   void onHealthChange(const std::string& node, bool healthy) {
@@ -234,6 +242,7 @@ Router::Router(const RouterConfig& config, obs::Registry& registry)
     }
     res.set_content(nlohmann::json{{"backends", backends}}.dump(), kJson);
   });
+  impl_->startMonitor();
 }
 
 Router::~Router() = default;

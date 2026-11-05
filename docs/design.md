@@ -106,8 +106,8 @@ small part of the total. The library stays for allocation-heavy work.
 **Our kernels are not used in serving.** ONNX Runtime is faster on batches, so replacing it would make
 the server slower. The kernels exist to find out where that gap comes from.
 
-**AVX2 was written and compiled but never run.** It builds for x86-64, but the development machine
-cannot run x86 binaries. Run `perf_tests` on an x86 machine before relying on it.
+**AVX2 is tested for correctness only.** Its tests pass under x86-64 emulation in Docker, which says
+nothing about its speed, and it has not run on real x86 hardware.
 
 ## Observability
 

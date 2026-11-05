@@ -103,10 +103,16 @@ Sampling counts wall-clock time, so a thread blocked in a system call counts as 
 
 All 119 tests pass with no reports under AddressSanitizer with UndefinedBehaviorSanitizer, and under
 ThreadSanitizer, including end-to-end tests with real processes. An earlier run of the server under
-real load was also clean. ONNX Runtime is a prebuilt binary and is not instrumented. Leak detection
-was not part of these runs, since LeakSanitizer is not reliable on macOS.
+real load was also clean. ONNX Runtime is a prebuilt binary and is not instrumented.
 
-ASan found one real bug during development: a range-for over a temporary JSON value.
+The same tests pass on Linux arm64 in Docker (`ci/Dockerfile`), with leak detection on under ASan.
+
+Bugs these tools found during development:
+
+- ASan: a range-for over a temporary JSON value.
+- TSan on Linux, not on macOS: the router's health thread started before construction finished, racing
+  with route setup inside libstdc++'s regex code.
+- libFuzzer with UBSan: signed overflow in window arithmetic for timestamps near the 64-bit limits.
 
 ## Phase 2: streaming
 
@@ -291,8 +297,9 @@ predicted this, and the plan's condition of optimizing where profiling shows it 
 
 ### AVX2
 
-Written and compiled for x86-64, but **never run**, because this Mac cannot run x86 binaries. It also has only
-the simpler design, not the micro-kernel. The plan's Phase 4 assumed AVX2, and NEON took its place here.
+Its correctness tests pass under x86-64 emulation in Docker, but **its speed has not been measured**,
+since emulated timings mean nothing. It also has only the simpler design, not the micro-kernel. The plan's
+Phase 4 assumed AVX2, and NEON took its place here.
 
 ## Phase 5: observability
 

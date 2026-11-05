@@ -19,6 +19,10 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x
   set(ip_ort_platform linux-x64)
   set(ip_ort_sha256 8344d55f93d5bc5021ce342db50f62079daf39aaafb5d311a451846228be49b3)
   set(ip_ort_lib libonnxruntime.so)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+  set(ip_ort_platform linux-aarch64)
+  set(ip_ort_sha256 bb76395092d150b52c7092dc6b8f2fe4d80f0f3bf0416d2f269193e347e24702)
+  set(ip_ort_lib libonnxruntime.so)
 else()
   message(FATAL_ERROR "No pinned ONNX Runtime binary for "
                       "${CMAKE_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR}")

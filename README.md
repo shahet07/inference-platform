@@ -41,8 +41,9 @@ model. [Read the caveats](docs/benchmarks.md#read-this-first) before quoting the
 ## Build and test
 
 Requires CMake 3.24+, Ninja, Python 3, and a C++20 compiler. CMake downloads its dependencies on first
-configure. Pinned ONNX Runtime binaries exist for macOS arm64 and Linux x86-64, though only macOS has been
-built and tested so far.
+configure. Pinned ONNX Runtime binaries exist for macOS arm64, Linux arm64, and Linux x86-64. The tests pass
+on macOS arm64 and Linux arm64. On x86-64 they have only run under emulation in Docker, and only the
+runtime and kernel tests.
 
 ```sh
 brew install cmake ninja llvm   # llvm provides clang-tidy and clang-format
@@ -131,5 +132,9 @@ drained, but the event log itself does not survive the restart.
 
 ## Limitations
 
-No TLS or authentication, one model per node, an in-memory event log, and a single router instance. The AVX2
-kernel has never been run. All benchmarks ran on one machine. See [design notes](docs/design.md#known-gaps).
+No TLS or authentication, one model per node, an in-memory event log, and a single router instance. All
+benchmarks ran on one machine. See [design notes](docs/design.md#known-gaps).
+
+## License
+
+[MIT](LICENSE)
