@@ -1,0 +1,15 @@
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  clang-analyzer-*,
+  concurrency-*,
+  performance-*,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  readability-braces-around-statements,
+  readability-const-return-type,
+  readability-container-size-empty,
+  readability-redundant-*
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/(obs|runtime|server|stream|cluster|perf|tests|bench)/.*'
