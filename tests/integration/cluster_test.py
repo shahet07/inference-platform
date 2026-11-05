@@ -67,6 +67,10 @@ try:
     for port in [*NODE_PORTS, ROUTER_PORT]:
         wait_for(lambda p=port: request(p, "/healthz")[0] == 200, f"port {port}")
 
+    # Nodes that were still starting when the router's first probes ran are out of rotation for a moment.
+    # Keys recorded before they return would be recorded against the wrong owner.
+    wait_for(lambda: healthy_count() == 3, "all backends to be in rotation")
+
     # Routing: keys spread out, and each key stays on one node.
     owners = {}
     for i in range(60):
