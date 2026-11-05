@@ -1,0 +1,16 @@
+set(perf_sources src/arena.cpp src/kernels.cpp)
+set(perf_defines "")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+  list(APPEND perf_sources src/kernels_neon.cpp)
+  list(APPEND perf_defines IP_HAS_NEON_KERNEL)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64)$")
+  list(APPEND perf_sources src/kernels_avx2.cpp)
+  list(APPEND perf_defines IP_HAS_AVX2_KERNEL)
+  # Only this file may use AVX2, so that the program still starts on a CPU without it.
+  set_source_files_properties(src/kernels_avx2.cpp PROPERTIES COMPILE_OPTIONS "-mavx2;-mfma")
+endif()
+
+add_library(perf ${perf_sources})
+target_include_directories(perf PUBLIC include)
+target_compile_definitions(perf PRIVATE ${perf_defines})
+target_compile_options(perf PRIVATE -O3)
