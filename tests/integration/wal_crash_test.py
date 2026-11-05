@@ -51,6 +51,11 @@ with tempfile.TemporaryDirectory() as tmp:
         acks = []
         reader = threading.Thread(target=collect_acks, args=(process, acks))
         reader.start()
+        # Starting can take a while on a slow machine, and killing it before it has done anything would
+        # test nothing.
+        deadline = time.time() + 60
+        while not acks and time.time() < deadline:
+            time.sleep(0.005)
         time.sleep(rng.uniform(0.05, 0.4))
         process.send_signal(signal.SIGKILL)
         process.wait()
