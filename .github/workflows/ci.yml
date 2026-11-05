@@ -37,5 +37,5 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y ninja-build libclang-rt-dev
       - run: cmake --preset fuzz
-      - run: cmake --build --preset fuzz --target fuzz_traceparent fuzz_escape fuzz_registry fuzz_window
+      - run: cmake --build --preset fuzz --target fuzz_traceparent fuzz_escape fuzz_registry fuzz_window fuzz_wal
       - run: python3 tools/run_fuzzers.py --seconds 30

@@ -42,8 +42,7 @@ model. [Read the caveats](docs/benchmarks.md#read-this-first) before quoting the
 
 Requires CMake 3.24+, Ninja, Python 3, and a C++20 compiler. CMake downloads its dependencies on first
 configure. Pinned ONNX Runtime binaries exist for macOS arm64, Linux arm64, and Linux x86-64. The tests pass
-on macOS arm64 and Linux arm64. On x86-64 they have only run under emulation in Docker, and only the
-runtime and kernel tests.
+on macOS arm64 and Linux arm64 and x86-64, and CI runs them on every push.
 
 ```sh
 brew install cmake ninja llvm   # llvm provides clang-tidy and clang-format
@@ -117,7 +116,7 @@ The router restores a backend after 2 good probes, about half a second, with no 
 
 Check `rate(stream_dropped_newest_total[1m])`. Above zero, the consumers cannot keep up, and the log is
 dropping events by design so that inference is not delayed. Windows also only appear once they close,
-1 second by default, and the log is in memory, so a restart loses events.
+1 second by default. Without `--events-dir`, the log is in memory and a restart loses events.
 
 ### Model metadata differs between nodes
 
@@ -128,11 +127,11 @@ the same model at once, the higher `(version, node id)` wins and the other write
 ### Shutdown
 
 `SIGTERM` or `SIGINT` stops accepting requests and exits cleanly, logging `stopped`. Queued events are
-drained, but the event log itself does not survive the restart.
+drained. The event log survives the restart only if `--events-dir` is set.
 
 ## Limitations
 
-No TLS or authentication, one model per node, an in-memory event log, and a single router instance. All
+No TLS or authentication, one model per node, a single router instance. All
 benchmarks ran on one machine. See [design notes](docs/design.md#known-gaps).
 
 ## License

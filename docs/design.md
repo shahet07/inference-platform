@@ -72,7 +72,28 @@ writes to, and this project has no such store.
 Windows close by a watermark, late events are counted and dropped, and a per-window key limit means
 a flood of unique keys cannot exhaust memory.
 
-**Limitation: the log is in memory.** A restart loses events. Persistence is the natural next step.
+**Optional write-ahead log, one directory of segments per shard.** Each record has a size, a CRC-32, and
+its offset. Recovery keeps everything up to the first bad record in the last segment, which a crash can
+leave half-written. Bad data in any earlier segment is an error, because those were synced before the
+next began, so that is corruption and silently dropping it would hide lost data.
+
+The fsync policy is explicit, like the backpressure policy:
+
+| Policy | Append returns after | Survives process crash | Survives power loss |
+| --- | --- | --- | --- |
+| `kEveryAppend` | A sync, shared by concurrent appends | Yes | As far as the disk honors it |
+| `kInterval` | The OS has it; synced every 10 ms on another thread | Yes | Up to the last interval lost |
+| `kNever` | The OS has it | Yes | Whatever the OS had not written |
+
+The server records events with `appendNoWait`, so requests never wait on the disk. A crash can lose the
+most recently buffered analytics events, which is the right trade for analytics.
+
+On macOS a plain `fsync` only reaches the drive's cache, so this uses `F_FULLFSYNC`, which is why
+`kEveryAppend` is so slow here.
+
+**Tiered storage behind a small interface.** When consumers pass a sealed segment, it moves to a
+`SegmentStore`, and reads of older offsets come from there. Only a directory-backed store exists: a real
+S3 store would implement the same three methods, but none has been written or tested.
 
 ## Cluster
 
@@ -106,8 +127,8 @@ small part of the total. The library stays for allocation-heavy work.
 **Our kernels are not used in serving.** ONNX Runtime is faster on batches, so replacing it would make
 the server slower. The kernels exist to find out where that gap comes from.
 
-**AVX2 is tested for correctness only.** Its tests pass under x86-64 emulation in Docker, which says
-nothing about its speed, and it has not run on real x86 hardware.
+**AVX2 is tested for correctness only.** Its tests run in CI on x86-64, but its speed has not been
+benchmarked.
 
 ## Observability
 
@@ -129,7 +150,7 @@ exporter dependency, but it means no Jaeger-style UI without adding one.
 
 - No TLS or authentication. Everything binds to localhost by default and assumes a trusted network.
 - A node serves one model, chosen at startup. The registry records metadata but does not load models.
-- The event log is not persistent.
+- The event log persists to one machine's disk and is not replicated by default.
 - The router is a single instance with no failover of its own.
 - All cluster benchmarks ran on one machine, so they show this machine's limits and not those of a
   real cluster with its own network.

@@ -47,12 +47,14 @@ int main(int argc, char** argv) {
   try {
     const auto flags = parseFlags(std::span(argv, static_cast<std::size_t>(argc)));
     if (!flags.contains("model")) {
-      std::cerr << "usage: inference_server --model PATH [--host H] [--port P] [--workers N]\n"
-                   "  [--max-batch N] [--max-wait-us N] [--queue N] [--connections N]\n"
-                   "  [--tcp-nodelay 0|1] [--keep-alive-max N] [--events 0|1] [--window-ms N]\n"
-                   "  [--arena 0|1] [--trace-file PATH] [--trace-sample N] [--node-id ID] [--peers "
-                   "host:port,...] "
-                   "[--replication-interval-ms N]\n";
+      std::cerr
+          << "usage: inference_server --model PATH [--host H] [--port P] [--workers N]\n"
+             "  [--max-batch N] [--max-wait-us N] [--queue N] [--connections N]\n"
+             "  [--tcp-nodelay 0|1] [--keep-alive-max N] [--events 0|1] [--window-ms N]\n"
+             "  [--events-dir DIR] [--events-fsync always|interval|never] [--events-archive DIR]\n"
+             "  [--arena 0|1] [--trace-file PATH] [--trace-sample N] [--node-id ID] [--peers "
+             "host:port,...] "
+             "[--replication-interval-ms N]\n";
       return EXIT_FAILURE;
     }
 
@@ -99,8 +101,22 @@ int main(int argc, char** argv) {
     std::unique_ptr<stream::ShardedLog> events;
     std::unique_ptr<stream::StreamProcessor> processor;
     if (sizeFlag(flags, "events", 1) != 0) {
-      events = std::make_unique<stream::ShardedLog>(
-          stream::LogConfig{.policy = stream::BackpressurePolicy::kDropNewest});
+      stream::LogConfig log_config{.policy = stream::BackpressurePolicy::kDropNewest};
+      if (flags.contains("events-dir")) {
+        // Sync on an interval by default: syncing per event would make requests wait on the disk.
+        stream::WalConfig wal;
+        wal.dir = flags.at("events-dir");
+        const std::string fsync =
+            flags.contains("events-fsync") ? flags.at("events-fsync") : "interval";
+        wal.fsync = fsync == "always"  ? stream::FsyncPolicy::kEveryAppend
+                    : fsync == "never" ? stream::FsyncPolicy::kNever
+                                       : stream::FsyncPolicy::kInterval;
+        if (flags.contains("events-archive")) {
+          wal.archive = std::make_shared<stream::DirectorySegmentStore>(flags.at("events-archive"));
+        }
+        log_config.wal = wal;
+      }
+      events = std::make_unique<stream::ShardedLog>(log_config);
       processor = std::make_unique<stream::StreamProcessor>(
           *events,
           stream::ProcessorConfig{.window = {.window_ms = static_cast<std::int64_t>(

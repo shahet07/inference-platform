@@ -10,3 +10,6 @@ target_compile_options(kernels_bench PRIVATE -O3)
 
 add_executable(model_bench model_bench.cpp)
 target_link_libraries(model_bench PRIVATE runtime nlohmann_json::nlohmann_json)
+
+add_executable(wal_bench wal_bench.cpp)
+target_link_libraries(wal_bench PRIVATE stream nlohmann_json::nlohmann_json)

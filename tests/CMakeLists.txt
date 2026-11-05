@@ -22,7 +22,8 @@ add_executable(stream_tests
   stream/sharded_log_test.cpp
   stream/consumer_group_test.cpp
   stream/window_test.cpp
-  stream/processor_test.cpp)
+  stream/processor_test.cpp
+  stream/wal_test.cpp)
 target_link_libraries(stream_tests PRIVATE stream GTest::gtest_main GTest::gmock)
 gtest_discover_tests(stream_tests)
 
@@ -49,3 +50,10 @@ add_test(NAME integration.observability
     $<TARGET_FILE:inference_server> $<TARGET_FILE:inference_router>
     ${CMAKE_SOURCE_DIR}/bench/models/mlp_quant.onnx 19200)
 set_tests_properties(integration.observability PROPERTIES TIMEOUT 120)
+
+add_executable(wal_crash_writer integration/wal_crash_writer.cpp)
+target_link_libraries(wal_crash_writer PRIVATE stream)
+add_test(NAME integration.wal_crash
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/wal_crash_test.py
+    $<TARGET_FILE:wal_crash_writer>)
+set_tests_properties(integration.wal_crash PROPERTIES TIMEOUT 180)

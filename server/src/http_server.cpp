@@ -87,7 +87,7 @@ struct HttpServer::Impl {
     }
     const std::string client = req.get_header_value("X-Client-Id");
     const auto now = std::chrono::system_clock::now().time_since_epoch();
-    (void)events->append(
+    (void)events->appendNoWait(
         {.key = client.empty() ? "anonymous" : client,
          .value =
              std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started)

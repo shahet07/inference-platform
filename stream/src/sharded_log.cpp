@@ -17,6 +17,17 @@ ShardedLog::ShardedLog(const LogConfig& config)
   for (std::size_t i = 0; i < config.shards; ++i) {
     auto shard = std::make_unique<Shard>();
     shard->ring.resize(capacity_);
+    if (config.wal) {
+      shard->wal = std::make_unique<ShardWal>(*config.wal, i);
+      RecoveredShard recovered = shard->wal->recover(capacity_);
+      shard->head = recovered.first_offset;
+      shard->tail = recovered.next_offset;
+      shard->stats.recovered = recovered.events.size();
+      shard->stats.truncated_bytes = recovered.truncated_bytes;
+      for (std::size_t e = 0; e < recovered.events.size(); ++e) {
+        shard->ring[(recovered.first_offset + e) % capacity_] = std::move(recovered.events[e]);
+      }
+    }
     shards_.push_back(std::move(shard));
   }
 }
@@ -25,7 +36,11 @@ std::size_t ShardedLog::shardFor(std::string_view key) const {
   return std::hash<std::string_view>{}(key) % shards_.size();
 }
 
-AppendResult ShardedLog::append(Event event) {
+AppendResult ShardedLog::append(Event event) { return appendImpl(std::move(event), true); }
+
+AppendResult ShardedLog::appendNoWait(Event event) { return appendImpl(std::move(event), false); }
+
+AppendResult ShardedLog::appendImpl(Event event, bool wait_for_wal) {
   const std::size_t index = shardFor(event.key);
   Shard& shard = *shards_[index];
   std::unique_lock lock(shard.mutex);
@@ -54,6 +69,9 @@ AppendResult ShardedLog::append(Event event) {
     }
   }
   const std::uint64_t offset = shard.tail;
+  if (shard.wal) {
+    shard.wal->enqueue(offset, event);
+  }
   shard.ring[offset % capacity_] = std::move(event);
   ++shard.tail;
   ++shard.stats.appended;
@@ -65,6 +83,9 @@ AppendResult ShardedLog::append(Event event) {
   if (wake_reader) {
     shard.has_events.notify_all();
   }
+  if (wait_for_wal && shard.wal && !shard.wal->waitDurable(offset)) {
+    return {.status = AppendStatus::kClosed, .shard = index, .offset = offset};
+  }
   return {.status = AppendStatus::kAppended, .shard = index, .offset = offset};
 }
 
@@ -72,6 +93,17 @@ ReadResult ShardedLog::read(std::size_t shard_index, std::uint64_t offset, std::
                             std::chrono::milliseconds wait, std::size_t min_events) {
   Shard& shard = *shards_.at(shard_index);
   std::unique_lock lock(shard.mutex);
+  if (offset < shard.head && shard.wal && shard.wal->hasArchive()) {
+    // Archive reads can be slow, so they do not hold up producers on this shard.
+    ShardWal& wal = *shard.wal;
+    lock.unlock();
+    ReadResult archived;
+    archived.events = wal.readArchived(offset, max_events, archived.next_offset);
+    if (!archived.events.empty()) {
+      return archived;
+    }
+    lock.lock();
+  }
   if (wait.count() > 0) {
     // Never wait for more than a shard can hold, or for more than was asked for.
     const std::uint64_t target = offset + std::clamp<std::size_t>(min_events, 1, capacity_);
@@ -109,6 +141,26 @@ ShardedLog::GroupId ShardedLog::registerGroup() {
   for (const auto& shard : shards_) {
     shard->group_offsets.push_back(shard->head);
   }
+  const std::scoped_lock groups_lock(groups_mutex_);
+  durable_groups_.emplace_back();
+  return group;
+}
+
+ShardedLog::GroupId ShardedLog::registerDurableGroup(const std::string& name) {
+  const GroupId group = registerGroup();
+  {
+    const std::scoped_lock lock(groups_mutex_);
+    durable_groups_[group] = name;
+  }
+  for (const auto& shard : shards_) {
+    const std::scoped_lock lock(shard->mutex);
+    if (shard->wal) {
+      const std::uint64_t saved = shard->wal->loadGroupOffset(name);
+      std::uint64_t& position = shard->group_offsets.at(group);
+      position = std::max(position, std::min(saved, shard->tail));
+      trim(*shard);
+    }
+  }
   return group;
 }
 
@@ -126,6 +178,7 @@ void ShardedLog::unregisterGroup(GroupId group) {
 void ShardedLog::commit(GroupId group, std::size_t shard_index, std::uint64_t next_offset) {
   Shard& shard = *shards_.at(shard_index);
   bool wake_writers = false;
+  std::uint64_t position = 0;
   {
     const std::scoped_lock lock(shard.mutex);
     std::uint64_t& committed_offset = shard.group_offsets.at(group);
@@ -133,8 +186,22 @@ void ShardedLog::commit(GroupId group, std::size_t shard_index, std::uint64_t ne
       return;
     }
     committed_offset = std::max(committed_offset, std::min(next_offset, shard.tail));
+    position = committed_offset;
     trim(shard);
     wake_writers = shard.waiting_writers > 0;
+    if (shard.wal) {
+      shard.wal->trimBelow(shard.head);
+    }
+  }
+  if (shard.wal) {
+    std::string name;
+    {
+      const std::scoped_lock lock(groups_mutex_);
+      name = durable_groups_.at(group);
+    }
+    if (!name.empty()) {
+      shard.wal->saveGroupOffset(name, position);
+    }
   }
   if (wake_writers) {
     shard.has_room.notify_all();
@@ -181,6 +248,8 @@ LogStats ShardedLog::stats() const {
     total.evicted_oldest += shard->stats.evicted_oldest;
     total.blocked_appends += shard->stats.blocked_appends;
     total.retained += shard->tail - shard->head;
+    total.recovered += shard->stats.recovered;
+    total.truncated_bytes += shard->stats.truncated_bytes;
   }
   return total;
 }
@@ -201,6 +270,8 @@ std::string ShardedLog::renderPrometheus() const {
   metric("stream_blocked_appends_total", "counter", "Appends that waited for room.",
          s.blocked_appends);
   metric("stream_retained_events", "gauge", "Events held across all shards.", s.retained);
+  metric("stream_recovered_events", "gauge", "Events restored from disk at startup.", s.recovered);
+  metric("stream_truncated_bytes", "gauge", "Torn bytes removed at startup.", s.truncated_bytes);
   return out.str();
 }
 

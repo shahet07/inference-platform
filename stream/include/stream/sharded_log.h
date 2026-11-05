@@ -6,17 +6,15 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
-namespace stream {
+#include "stream/event.h"
+#include "stream/wal.h"
 
-struct Event {
-  std::string key;
-  double value = 0.0;
-  std::int64_t timestamp_ms = 0;
-};
+namespace stream {
 
 // What append does when a shard is full.
 enum class BackpressurePolicy : std::uint8_t {
@@ -29,6 +27,8 @@ struct LogConfig {
   std::size_t shards = 8;
   std::size_t shard_capacity = 65536;
   BackpressurePolicy policy = BackpressurePolicy::kDropNewest;
+  // Optional. When set, events are written ahead to disk and restored on the next start.
+  std::optional<WalConfig> wal;
 };
 
 enum class AppendStatus : std::uint8_t { kAppended, kDropped, kClosed };
@@ -52,6 +52,8 @@ struct LogStats {
   std::uint64_t evicted_oldest = 0;
   std::uint64_t blocked_appends = 0;
   std::uint64_t retained = 0;
+  std::uint64_t recovered = 0;        // Events restored from disk at startup.
+  std::uint64_t truncated_bytes = 0;  // Torn data removed from the end of the log at startup.
 };
 
 // An in-memory log split into fixed-capacity shards. Events with the same key always go to the
@@ -67,6 +69,9 @@ class ShardedLog {
   explicit ShardedLog(const LogConfig& config);
 
   [[nodiscard]] AppendResult append(Event event);
+  // Like append, but returns as soon as the write-ahead log has buffered the event, so a crash can
+  // lose it. For callers that must not wait on the disk.
+  [[nodiscard]] AppendResult appendNoWait(Event event);
 
   // Copies up to `max_events` starting at `offset`. If fewer than `min_events` are available,
   // waits up to `wait` for that many, then returns what there is. Raising `min_events` lets a
@@ -77,8 +82,12 @@ class ShardedLog {
                                 std::chrono::milliseconds wait = std::chrono::milliseconds(0),
                                 std::size_t min_events = 1);
 
-  // A new group starts at each shard's oldest retained event.
+  // A new group starts at each shard's oldest retained event, unless it can read older ones from an
+  // archive, in which case read() still finds them when asked.
   [[nodiscard]] GroupId registerGroup();
+  // Like registerGroup, but with a write-ahead log the position survives restarts, so the group
+  // resumes where it last committed. Without one, this is the same as registerGroup.
+  [[nodiscard]] GroupId registerDurableGroup(const std::string& name);
   void unregisterGroup(GroupId group);
   // Offsets only move forward; committing an older or out-of-range offset is ignored or clamped.
   void commit(GroupId group, std::size_t shard, std::uint64_t next_offset);
@@ -109,12 +118,16 @@ class ShardedLog {
     std::size_t waiting_writers = 0;
     bool closed = false;
     LogStats stats;
+    std::unique_ptr<ShardWal> wal;
   };
 
+  AppendResult appendImpl(Event event, bool wait_for_wal);
   void trim(Shard& shard) const;
 
   std::size_t capacity_;
   BackpressurePolicy policy_;
+  std::vector<std::string> durable_groups_;  // Empty names mark groups that are not durable.
+  mutable std::mutex groups_mutex_;
   std::vector<std::unique_ptr<Shard>> shards_;
 };
 
