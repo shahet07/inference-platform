@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGETS = {"fuzz_traceparent": "traceparent", "fuzz_escape": "escape",
-           "fuzz_registry": "registry", "fuzz_window": "window", "fuzz_wal": "wal"}
+           "fuzz_registry": "registry", "fuzz_window": "window", "fuzz_wal": "wal", "fuzz_join": "window", "fuzz_sliding": "window"}
 
 
 def main():

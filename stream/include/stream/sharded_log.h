@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "stream/event.h"
@@ -31,7 +32,13 @@ struct LogConfig {
   std::optional<WalConfig> wal;
 };
 
-enum class AppendStatus : std::uint8_t { kAppended, kDropped, kClosed };
+enum class AppendStatus : std::uint8_t {
+  kAppended,
+  kDropped,
+  kClosed,
+  kDuplicate,  // An idempotent append this log has already taken. The caller can treat it as
+               // success.
+};
 
 struct AppendResult {
   AppendStatus status = AppendStatus::kClosed;
@@ -52,6 +59,7 @@ struct LogStats {
   std::uint64_t evicted_oldest = 0;
   std::uint64_t blocked_appends = 0;
   std::uint64_t retained = 0;
+  std::uint64_t duplicates = 0;       // Idempotent appends recognized as retries.
   std::uint64_t recovered = 0;        // Events restored from disk at startup.
   std::uint64_t truncated_bytes = 0;  // Torn data removed from the end of the log at startup.
 };
@@ -72,6 +80,11 @@ class ShardedLog {
   // Like append, but returns as soon as the write-ahead log has buffered the event, so a crash can
   // lose it. For callers that must not wait on the disk.
   [[nodiscard]] AppendResult appendNoWait(Event event);
+
+  // Appends at most once, however many times it is retried. `event.producer_id` must not be 0, and
+  // each producer's `event.sequence` must increase. A sequence at or below the producer's highest
+  // for this shard returns kDuplicate. With a write-ahead log, this holds across restarts.
+  [[nodiscard]] AppendResult appendIdempotent(Event event);
 
   // Copies up to `max_events` starting at `offset`. If fewer than `min_events` are available,
   // waits up to `wait` for that many, then returns what there is. Raising `min_events` lets a
@@ -118,6 +131,7 @@ class ShardedLog {
     std::size_t waiting_writers = 0;
     bool closed = false;
     LogStats stats;
+    std::unordered_map<std::uint64_t, std::uint64_t> producers;  // Highest sequence per producer.
     std::unique_ptr<ShardWal> wal;
   };
 

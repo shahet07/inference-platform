@@ -82,9 +82,21 @@ version's runtime, and made throughput fall as shards were added. Readers now wa
 or 5 ms, whichever comes first, as Kafka does with `fetch.min.bytes` and `fetch.max.wait.ms`. That
 adds up to 5 ms of delay to analytics.
 
-**Delivery is at-least-once.** A consumer commits offsets after processing, so a rebalance
-redelivers anything uncommitted. Exactly-once would need transactions with whatever the consumer
-writes to, and this project has no such store.
+**Delivery is at-least-once by default, with exactly-once available.** A consumer commits offsets after
+processing, so a rebalance redelivers anything uncommitted. Exactly-once takes two parts. Idempotent producers
+give each event a producer id and sequence number, so a retry is recognized, and the highest sequence per
+producer is snapshotted before old segments are removed, so that survives trimming. `ExactlyOnceAggregator` then
+saves its state and read position together in one atomically renamed file, so after a crash both come from the
+same moment and a replay cannot double count. This only covers state in that file. Writing to an external
+system exactly once would need that system to take part. A producer must also send each shard its sequence numbers
+in order, since a lower number counts as a retry.
+
+**Sliding windows count an event once, into a pane.** A window merges its panes as it closes, so adding an event
+costs the same however many windows overlap, and long idle gaps skip empty windows instead of stepping through them.
+
+**Interval joins keep events until both sides have moved past any match.** A stalled stream therefore holds
+events back, so each key has a buffer limit, with drops counted. Hitting the limit loses matches, which is the
+trade for bounded memory.
 
 **Each shard's consumer owns its aggregator.** A key maps to one shard, so aggregators need no locks.
 Windows close by a watermark, late events are counted and dropped, and a per-window key limit means

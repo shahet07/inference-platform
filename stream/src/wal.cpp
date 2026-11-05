@@ -20,7 +20,7 @@ namespace {
 namespace fs = std::filesystem;
 
 constexpr std::size_t kHeaderBytes = 8;  // Payload size and CRC.
-constexpr std::size_t kFixedPayloadBytes = 8 + 4 + 8 + 8;
+constexpr std::size_t kFixedPayloadBytes = 8 + 4 + 8 + 8 + 8 + 8;
 constexpr std::size_t kMaxPayloadBytes = std::size_t{64} * 1024 * 1024;
 
 std::array<std::uint32_t, 256> makeCrcTable() {
@@ -66,6 +66,8 @@ void appendRecord(std::string& out, std::uint64_t offset, const Event& event) {
   payload += event.key;
   putValue<double>(payload, event.value);
   putValue<std::int64_t>(payload, event.timestamp_ms);
+  putValue<std::uint64_t>(payload, event.producer_id);
+  putValue<std::uint64_t>(payload, event.sequence);
   putValue<std::uint32_t>(out, static_cast<std::uint32_t>(payload.size()));
   putValue<std::uint32_t>(out, crc32(payload));
   out += payload;
@@ -141,6 +143,8 @@ std::size_t parseRecords(std::string_view data, std::uint64_t expected_offset,
     event.key.assign(payload.substr(12, key_size));
     event.value = getValue<double>(payload, 12 + key_size);
     event.timestamp_ms = getValue<std::int64_t>(payload, 20 + key_size);
+    event.producer_id = getValue<std::uint64_t>(payload, 28 + key_size);
+    event.sequence = getValue<std::uint64_t>(payload, 36 + key_size);
     on_event(offset, std::move(event));
     ++expected_offset;
     position += kHeaderBytes + size;
@@ -216,6 +220,8 @@ RecoveredShard ShardWal::recover(std::size_t max_events) {
   std::ranges::sort(segments, {}, &Segment::first_offset);
 
   RecoveredShard recovered;
+  // Segments below this can be gone, so what they held comes from the last snapshot.
+  loadProducers(recovered.producers);
   // Events are kept only up to the maximum, oldest dropped first, with reads of older ones served
   // by whatever is still on disk or in the archive.
   std::uint64_t next = segments.empty() ? 0 : segments.front().first_offset;
@@ -228,6 +234,10 @@ RecoveredShard ShardWal::recover(std::size_t max_events) {
     }
     const std::string data = readFile(segment.path);
     const std::size_t valid = parseRecords(data, next, [&](std::uint64_t offset, Event event) {
+      if (event.producer_id != 0) {
+        std::uint64_t& last = recovered.producers[event.producer_id];
+        last = std::max(last, event.sequence);
+      }
       recovered.events.push_back(std::move(event));
       if (recovered.events.size() > max_events * 2) {
         // Dropping in bulk keeps this linear however long the log is.
@@ -271,6 +281,7 @@ RecoveredShard ShardWal::recover(std::size_t max_events) {
   }
   buffered_up_to_ = next;
   durable_up_to_ = next;
+  producers_ = recovered.producers;
   start();
   return recovered;
 }
@@ -287,6 +298,9 @@ void ShardWal::enqueue(std::uint64_t offset, const Event& event) {
     const std::scoped_lock lock(mutex_);
     appendRecord(buffer_, offset, event);
     buffered_up_to_ = offset + 1;
+    if (event.producer_id != 0) {
+      producers_[event.producer_id] = event.sequence;
+    }
   }
   has_data_.notify_one();
 }
@@ -488,6 +502,39 @@ std::vector<Event> ShardWal::readArchived(std::uint64_t offset, std::size_t max_
     }
   }
   return events;
+}
+
+void ShardWal::saveProducers() {
+  std::map<std::uint64_t, std::uint64_t> copy;
+  {
+    const std::scoped_lock lock(mutex_);
+    copy = producers_;
+  }
+  const fs::path destination = shard_dir_ / "producers.snapshot";
+  const fs::path temporary = shard_dir_ / "producers.snapshot.tmp";
+  {
+    std::ofstream file(temporary, std::ios::trunc);
+    for (const auto& [producer, sequence] : copy) {
+      file << producer << ' ' << sequence << '\n';
+    }
+  }
+  const int fd = open(temporary.c_str(), O_RDONLY);
+  if (fd < 0) {
+    throwErrno("open producer snapshot");
+  }
+  syncFile(fd);
+  close(fd);
+  fs::rename(temporary, destination);
+  syncDirectory(shard_dir_);
+}
+
+void ShardWal::loadProducers(std::map<std::uint64_t, std::uint64_t>& producers) const {
+  std::ifstream file(shard_dir_ / "producers.snapshot");
+  std::uint64_t producer = 0;
+  std::uint64_t sequence = 0;
+  while (file >> producer >> sequence) {
+    producers[producer] = sequence;
+  }
 }
 
 void ShardWal::saveGroupOffset(const std::string& group, std::uint64_t offset) {

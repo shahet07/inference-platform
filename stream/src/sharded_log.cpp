@@ -24,6 +24,7 @@ ShardedLog::ShardedLog(const LogConfig& config)
       shard->tail = recovered.next_offset;
       shard->stats.recovered = recovered.events.size();
       shard->stats.truncated_bytes = recovered.truncated_bytes;
+      shard->producers.insert(recovered.producers.begin(), recovered.producers.end());
       for (std::size_t e = 0; e < recovered.events.size(); ++e) {
         shard->ring[(recovered.first_offset + e) % capacity_] = std::move(recovered.events[e]);
       }
@@ -40,12 +41,26 @@ AppendResult ShardedLog::append(Event event) { return appendImpl(std::move(event
 
 AppendResult ShardedLog::appendNoWait(Event event) { return appendImpl(std::move(event), false); }
 
+AppendResult ShardedLog::appendIdempotent(Event event) {
+  if (event.producer_id == 0) {
+    throw std::invalid_argument("idempotent appends need a producer id");
+  }
+  return appendImpl(std::move(event), true);
+}
+
 AppendResult ShardedLog::appendImpl(Event event, bool wait_for_wal) {
   const std::size_t index = shardFor(event.key);
   Shard& shard = *shards_[index];
   std::unique_lock lock(shard.mutex);
   if (shard.closed) {
     return {.status = AppendStatus::kClosed, .shard = index, .offset = 0};
+  }
+  if (event.producer_id != 0) {
+    const auto seen = shard.producers.find(event.producer_id);
+    if (seen != shard.producers.end() && event.sequence <= seen->second) {
+      ++shard.stats.duplicates;
+      return {.status = AppendStatus::kDuplicate, .shard = index, .offset = 0};
+    }
   }
   if (shard.tail - shard.head >= capacity_) {
     switch (policy_) {
@@ -69,6 +84,9 @@ AppendResult ShardedLog::appendImpl(Event event, bool wait_for_wal) {
     }
   }
   const std::uint64_t offset = shard.tail;
+  if (event.producer_id != 0) {
+    shard.producers[event.producer_id] = event.sequence;
+  }
   if (shard.wal) {
     shard.wal->enqueue(offset, event);
   }
@@ -248,6 +266,7 @@ LogStats ShardedLog::stats() const {
     total.evicted_oldest += shard->stats.evicted_oldest;
     total.blocked_appends += shard->stats.blocked_appends;
     total.retained += shard->tail - shard->head;
+    total.duplicates += shard->stats.duplicates;
     total.recovered += shard->stats.recovered;
     total.truncated_bytes += shard->stats.truncated_bytes;
   }

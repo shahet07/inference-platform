@@ -236,6 +236,26 @@ tests process crashes, not power loss**, and the slow syncs mean few events per 
 paths are covered by unit tests that cut a segment at each byte, and by fuzzing the record parser (22M
 runs, no failures), rather than by this test.
 
+### Stream operations
+
+Single thread, 1000 keys, median of 3 runs of `bench/stream_ops_bench.cpp`.
+
+| Operation | Events/s |
+| --- | --- |
+| Append | 62,091,393 |
+| Idempotent append | 43,672,148 |
+| Tumbling window | 44,621,415 |
+| Sliding window, 6 overlapping panes | 43,544,551 |
+| Interval join | 11,442,806 |
+
+### Exactly-once processing
+
+`tests/integration/exactly_once_test.py` kills a worker with SIGKILL 40 times at random moments, with the producer
+retrying every event from the start after each restart, and the consumer replaying from its last checkpoint.
+All 150,000 events then count exactly once across 50 keys, and every total matches. The final run alone
+recognized 64,219 retries. **This holds for process crashes and for the state in the checkpoint file.** It was
+not tested against power loss, since this test uses the fsync policy that survives only a process crash.
+
 ## Phase 3: cluster
 
 All nodes, the router, and the load generator share one machine. **This shows where this machine stops

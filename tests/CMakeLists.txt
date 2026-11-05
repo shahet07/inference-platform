@@ -24,7 +24,10 @@ add_executable(stream_tests
   stream/consumer_group_test.cpp
   stream/window_test.cpp
   stream/processor_test.cpp
-  stream/wal_test.cpp)
+  stream/wal_test.cpp
+  stream/sliding_window_test.cpp
+  stream/interval_join_test.cpp
+  stream/exactly_once_test.cpp)
 target_link_libraries(stream_tests PRIVATE stream GTest::gtest_main GTest::gmock)
 gtest_discover_tests(stream_tests)
 
@@ -63,3 +66,10 @@ add_test(NAME integration.hot_swap
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/hot_swap_test.py
     $<TARGET_FILE:inference_server> ${CMAKE_SOURCE_DIR}/bench/models 19300)
 set_tests_properties(integration.hot_swap PROPERTIES TIMEOUT 180)
+
+add_executable(exactly_once_worker integration/exactly_once_worker.cpp)
+target_link_libraries(exactly_once_worker PRIVATE stream)
+add_test(NAME integration.exactly_once
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/exactly_once_test.py
+    $<TARGET_FILE:exactly_once_worker>)
+set_tests_properties(integration.exactly_once PROPERTIES TIMEOUT 240)

@@ -1,0 +1,7 @@
+{
+  "append": 62091393.35673834,
+  "append_idempotent": 43672148.11810818,
+  "interval_join": 11442805.93041573,
+  "sliding_window_6_panes": 43544550.82184678,
+  "tumbling_window": 44621414.95934721
+}

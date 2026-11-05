@@ -13,3 +13,6 @@ target_link_libraries(model_bench PRIVATE runtime nlohmann_json::nlohmann_json)
 
 add_executable(wal_bench wal_bench.cpp)
 target_link_libraries(wal_bench PRIVATE stream nlohmann_json::nlohmann_json)
+
+add_executable(stream_ops_bench stream_ops_bench.cpp)
+target_link_libraries(stream_ops_bench PRIVATE stream nlohmann_json::nlohmann_json)

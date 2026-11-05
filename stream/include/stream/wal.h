@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -68,7 +69,8 @@ struct RecoveredShard {
   std::vector<Event> events;  // The newest events on local disk, up to the requested maximum.
   std::uint64_t first_offset = 0;
   std::uint64_t next_offset = 0;
-  std::uint64_t truncated_bytes = 0;  // Torn data removed from the end of the log.
+  std::uint64_t truncated_bytes = 0;                 // Torn data removed from the end of the log.
+  std::map<std::uint64_t, std::uint64_t> producers;  // Each producer's highest sequence number.
 };
 
 // Parses as many valid records as `data` holds, starting at `expected_offset`. Returns the number
@@ -80,7 +82,7 @@ std::size_t parseRecords(std::string_view data, std::uint64_t expected_offset,
 // The write-ahead log for one shard: a directory of numbered segment files.
 //
 // Record format, little-endian: u32 payload size, u32 CRC-32 of the payload, then a payload of
-// u64 offset, u32 key size, key bytes, f64 value, i64 timestamp.
+// u64 offset, u32 key size, key bytes, f64 value, i64 timestamp, u64 producer id, u64 sequence.
 class ShardWal {
  public:
   ShardWal(const WalConfig& config, std::size_t shard);
@@ -128,6 +130,8 @@ class ShardWal {
   void sealCurrent();
   void syncCurrent();
   void applyTrim();
+  void saveProducers();
+  void loadProducers(std::map<std::uint64_t, std::uint64_t>& producers) const;
   [[nodiscard]] std::string archiveName(std::uint64_t first_offset) const;
 
   WalConfig config_;
@@ -141,6 +145,7 @@ class ShardWal {
   std::uint64_t buffered_up_to_ = 0;  // Next offset after what is buffered.
   std::uint64_t durable_up_to_ = 0;   // Next offset after what meets the policy.
   std::uint64_t trim_below_ = 0;
+  std::map<std::uint64_t, std::uint64_t> producers_;
   bool stopping_ = false;
   bool failed_ = false;
 
