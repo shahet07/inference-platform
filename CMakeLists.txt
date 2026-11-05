@@ -29,6 +29,7 @@ add_subdirectory(perf)
 add_subdirectory(runtime)
 add_subdirectory(stream)
 add_subdirectory(cluster)
+add_subdirectory(consensus)
 add_subdirectory(server)
 add_subdirectory(bench)
 

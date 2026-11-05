@@ -85,3 +85,12 @@ add_test(NAME integration.autoscale
     $<TARGET_FILE:inference_server> $<TARGET_FILE:inference_router> $<TARGET_FILE:load_gen>
     ${CMAKE_SOURCE_DIR}/bench/models/mlp_heavy_quant.onnx 19500)
 set_tests_properties(integration.autoscale PROPERTIES TIMEOUT 240)
+
+add_executable(consensus_tests consensus/raft_test.cpp consensus/file_storage_test.cpp)
+target_link_libraries(consensus_tests PRIVATE consensus GTest::gtest_main)
+gtest_discover_tests(consensus_tests PROPERTIES TIMEOUT 200)
+
+add_test(NAME integration.raft
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/raft_test.py
+    $<TARGET_FILE:raft_node> 19700)
+set_tests_properties(integration.raft PROPERTIES TIMEOUT 240)

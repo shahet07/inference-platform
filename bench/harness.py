@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build" / "release"
 SERVER = BUILD / "server" / "inference_server"
 ROUTER = BUILD / "cluster" / "inference_router"
+RAFT_NODE = BUILD / "consensus" / "raft_node"
 LOAD_GEN = BUILD / "bench" / "load_gen"
 MODEL = ROOT / "bench" / "models" / "mlp_quant.onnx"
 RESULTS = ROOT / "bench" / "results"

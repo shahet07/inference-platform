@@ -34,7 +34,9 @@ struct Options {
   double warmup_seconds = 2;
   double rate = 0;
   bool tcp_nodelay = true;
-  bool binary = false;        // Send raw floats instead of JSON.
+  bool binary = false;  // Send raw floats instead of JSON.
+  std::string path = "/v1/infer";
+  std::string raw_body;       // When set, sent as is, as plain text, in place of model inputs.
   bool routing_keys = false;  // Send a per-connection X-Routing-Key header.
 };
 
@@ -58,7 +60,9 @@ ConnectionResult runConnection(const Options& options, const std::string& body,
     headers.emplace("X-Routing-Key", "client-" + std::to_string(index));
   }
 
-  const char* content_type = options.binary ? "application/octet-stream" : "application/json";
+  const char* content_type = !options.raw_body.empty() ? "text/plain"
+                             : options.binary          ? "application/octet-stream"
+                                                       : "application/json";
 
   ConnectionResult result;
   const std::chrono::duration<double> interval(
@@ -77,7 +81,7 @@ ConnectionResult runConnection(const Options& options, const std::string& body,
     if (start >= stop_at) {
       return result;
     }
-    const auto response = client.Post("/v1/infer", headers, body, content_type);
+    const auto response = client.Post(options.path, headers, body, content_type);
     const Clock::time_point end = Clock::now();
     if (start < measure_from) {
       continue;
@@ -136,6 +140,12 @@ Options parseOptions(std::span<char*> args) {
   }
   if (flags.contains("rate")) {
     o.rate = std::stod(flags["rate"]);
+  }
+  if (flags.contains("path")) {
+    o.path = flags["path"];
+  }
+  if (flags.contains("raw-body")) {
+    o.raw_body = flags["raw-body"];
   }
   if (flags.contains("binary")) {
     o.binary = flags["binary"] != "0";

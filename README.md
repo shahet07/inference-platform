@@ -30,6 +30,7 @@ model. [Read the caveats](docs/benchmarks.md#read-this-first) before quoting the
 | `server/` | Bounded queue, batching engine, HTTP server |
 | `stream/` | Sharded log, consumer groups, windowed aggregation |
 | `cluster/` | Hash ring, health checks, router, metadata replication |
+| `consensus/` | Raft: leader election and a replicated log |
 | `perf/` | Arena allocator, SIMD kernels |
 | `obs/` | Metrics, structured logs, tracing |
 | `bench/` | Load generator, benchmarks, results |

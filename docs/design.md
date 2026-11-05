@@ -189,9 +189,30 @@ Tracing must never be able to slow a request.
 **Spans are written as JSON lines.** `tools/trace_view.py` merges them across services. This avoids an
 exporter dependency, but it means no Jaeger-style UI without adding one.
 
+## Consensus
+
+**Raft is a deterministic state machine with no threads, clock, or network.** Time and messages are passed in, which
+is what makes it possible to simulate a whole cluster under hostile conditions, and replay any failure from a seed.
+The networked `raft_node` is a thin layer around it, with all Raft work on one thread.
+
+**All appends that arrive together share one write and sync.** With fsync, that group commit is the difference between
+about 155 and 2,697 writes/s.
+
+**A client can see an unknown outcome.** If a leader dies after receiving a write, the write may or may not commit, so
+the node returns 503, and a retrying client may add a command twice. Commands would need ids to deduplicate, as the
+event log's idempotent producers do.
+
+## Deployment
+
+`ops/k8s/` runs nodes behind a headless Service, which routers discover through DNS, with a CPU-based
+HorizontalPodAutoscaler. **The manifests have only passed a client-side dry run, and have not been applied to a
+cluster.** What was tested is the image from `ci/Dockerfile.runtime`, read-only and as a non-root user, in Docker:
+a router found two nodes through a shared DNS name, served requests from both, and dropped a stopped node.
+
 ## Known gaps
 
 - No TLS or authentication. Everything binds to localhost by default and assumes a trusted network.
-- The event log persists to one machine's disk and is not replicated by default.
+- The event log persists to one machine's disk. The Raft log is replicated, but is a separate service with no
+  compaction or membership changes, and the two are not connected.
 - All cluster benchmarks ran on one machine, so they show this machine's limits and not those of a
   real cluster with its own network.

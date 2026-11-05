@@ -387,6 +387,44 @@ maximum of 3 under load and back to 1 when idle, with 184,461 requests in the re
 **Unexplained:** in one sanitizer run, the exactly-once and autoscale tests timed out. They then passed 8 of 8
 repeat runs alone, and the cause was not found.
 
+### Raft replicated log
+
+`consensus/` implements leader election and log replication. **Testing, in two layers:**
+
+- **Simulation.** A whole cluster on one thread, with a network that drops 15% of messages, repeats and reorders
+  them, plus random crashes and partitions. Every step checks election safety, log matching, leader completeness,
+  and state machine safety. 600 random scenarios run on each test pass, 300 each on 3 and 5 nodes.
+- **Real processes.** `tests/integration/raft_test.py` kills the leader with SIGKILL 6 times under live writes. In a
+  recorded run, none of 21,111 acknowledged writes were lost, all 3 logs were identical, and writes resumed
+  99 to 169 ms after a leader died. A lone node refused a write. This runs without fsync, so it covers process
+  crashes and not power loss.
+
+To check that these tests can fail, five dangerous bugs were put in on purpose, and all five were caught: votes that
+ignore log freshness, a vote not saved to disk, committing old-term entries by counting replicas, committing without
+a majority, and truncating a log on any append. Chaos runs caught three, and dedicated unit tests the other two.
+
+Writes through the leader, 3 nodes, 100-byte commands, median of 3 runs:
+
+| fsync | Connections | Writes/s | p50 ms | p99 ms |
+| --- | --- | --- | --- | --- |
+| No | 1 | 3,456 | 0.29 | 0.38 |
+| No | 16 | 19,408 | 0.80 | 1.19 |
+| No | 64 | 24,297 | 2.58 | 3.93 |
+| Yes | 1 | 155 | 6.24 | 10.95 |
+| Yes | 16 | 701 | 22.66 | 34.90 |
+| Yes | 64 | 2,697 | 23.27 | 37.33 |
+
+No write failed in these runs. All three nodes share one machine and disk, over loopback, so a real cluster would
+add network latency to every commit. Concurrent writes share one sync through group commit, which is why synced
+throughput rises so much with connections.
+
+The first version resent everything unacknowledged with every write. Correctness tests passed, but under load this
+flooded the network until followers started elections, and throughput with 16 connections fell to 13 writes/s.
+Pipelining fixed it, at 19,408 writes/s for the same setup.
+
+**Not implemented:** log compaction, so the log grows without bound, and changing cluster membership while running.
+This replicated log is also a separate service, and is not wired into the event log or the model registry.
+
 ## Phase 4: performance layer
 
 Single-threaded, `-O3`. Our kernels and Eigen run with random weights in the same shape as
