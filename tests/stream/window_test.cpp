@@ -2,6 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <limits>
+
 namespace {
 
 using stream::WindowAggregator;
@@ -85,6 +88,20 @@ TEST(WindowTest, AdvanceClosesWindowsWithoutEvents) {
   aggregator.add("a", 1.0, 10);
   aggregator.advanceTo(100);
   EXPECT_EQ(aggregator.takeClosed().size(), 1U);
+}
+
+TEST(WindowTest, ExtremeTimestampsDoNotOverflow) {
+  // Found by fuzz_window. UndefinedBehaviorSanitizer fails this test if the arithmetic overflows.
+  constexpr std::int64_t kMax = std::numeric_limits<std::int64_t>::max();
+  constexpr std::int64_t kMin = std::numeric_limits<std::int64_t>::min();
+  WindowAggregator aggregator({.window_ms = 1000, .allowed_lateness_ms = -5});
+  // The watermark saturates at the maximum, so the high window closes at once and the low event
+  // arrives far behind it.
+  aggregator.add("high", 1.0, kMax);
+  EXPECT_EQ(aggregator.takeClosed().size(), 1U);
+  aggregator.add("low", 1.0, kMin);
+  EXPECT_EQ(aggregator.lateEvents(), 1U);
+  EXPECT_TRUE(aggregator.flush().empty());
 }
 
 TEST(WindowTest, FlushClosesEverythingOldestFirst) {

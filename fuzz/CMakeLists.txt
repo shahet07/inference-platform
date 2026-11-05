@@ -1,0 +1,10 @@
+function(ip_add_fuzzer name)
+  add_executable(${name} ${name}.cpp)
+  target_link_libraries(${name} PRIVATE ${ARGN} nlohmann_json::nlohmann_json)
+  target_link_options(${name} PRIVATE -fsanitize=fuzzer)
+endfunction()
+
+ip_add_fuzzer(fuzz_traceparent obs)
+ip_add_fuzzer(fuzz_escape obs)
+ip_add_fuzzer(fuzz_registry cluster)
+ip_add_fuzzer(fuzz_window stream)

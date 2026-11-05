@@ -8,13 +8,27 @@
 namespace stream {
 namespace {
 
+constexpr std::int64_t kMin = std::numeric_limits<std::int64_t>::min();
+constexpr std::int64_t kMax = std::numeric_limits<std::int64_t>::max();
+
+// Timestamps are arbitrary input, so arithmetic near the limits saturates instead of overflowing.
+std::int64_t addSaturating(std::int64_t a, std::int64_t b) {
+  std::int64_t out = 0;
+  return __builtin_add_overflow(a, b, &out) ? (b > 0 ? kMax : kMin) : out;
+}
+
+std::int64_t subSaturating(std::int64_t a, std::int64_t b) {
+  std::int64_t out = 0;
+  return __builtin_sub_overflow(a, b, &out) ? (b > 0 ? kMin : kMax) : out;
+}
+
 // Rounds down, including for timestamps before the epoch.
 std::int64_t windowStart(std::int64_t timestamp_ms, std::int64_t window_ms) {
   std::int64_t remainder = timestamp_ms % window_ms;
   if (remainder < 0) {
     remainder += window_ms;
   }
-  return timestamp_ms - remainder;
+  return subSaturating(timestamp_ms, remainder);
 }
 
 }  // namespace
@@ -30,7 +44,7 @@ WindowAggregator::WindowAggregator(const WindowConfig& config)
 
 void WindowAggregator::add(std::string_view key, double value, std::int64_t timestamp_ms) {
   const std::int64_t start = windowStart(timestamp_ms, config_.window_ms);
-  if (start + config_.window_ms <= closed_up_to_ms_) {
+  if (addSaturating(start, config_.window_ms) <= closed_up_to_ms_) {
     ++late_events_;
     return;
   }
@@ -61,7 +75,7 @@ std::vector<WindowResult> WindowAggregator::takeClosed() {
   if (max_timestamp_ms_ == std::numeric_limits<std::int64_t>::min()) {
     return {};
   }
-  const std::int64_t watermark = max_timestamp_ms_ - config_.allowed_lateness_ms;
+  const std::int64_t watermark = subSaturating(max_timestamp_ms_, config_.allowed_lateness_ms);
   closed_up_to_ms_ = std::max(closed_up_to_ms_, watermark);
   return takeUpTo(watermark);
 }
@@ -74,11 +88,11 @@ std::vector<WindowResult> WindowAggregator::takeUpTo(std::int64_t watermark) {
   std::vector<WindowResult> results;
   auto it = open_.begin();
   while (it != open_.end() && (watermark == std::numeric_limits<std::int64_t>::max() ||
-                               it->first + config_.window_ms <= watermark)) {
+                               addSaturating(it->first, config_.window_ms) <= watermark)) {
     for (auto& [key, stats] : it->second) {
       results.push_back({.key = key,
                          .window_start_ms = it->first,
-                         .window_end_ms = it->first + config_.window_ms,
+                         .window_end_ms = addSaturating(it->first, config_.window_ms),
                          .count = stats.count,
                          .sum = stats.sum,
                          .min = stats.min,
