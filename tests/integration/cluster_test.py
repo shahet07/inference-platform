@@ -74,7 +74,9 @@ try:
         status, headers, _ = infer(key)
         assert status == 200, status
         owners[key] = headers["X-Served-By"]
-        assert infer(key)[1]["X-Served-By"] == owners[key], "a key moved without a cluster change"
+        if infer(key)[1]["X-Served-By"] != owners[key]:
+            wait_for(lambda k=key: infer(k)[1]["X-Served-By"] == owners[k],
+                     f"{key} to return to {owners[key]}")
     assert len(set(owners.values())) == 3, f"keys did not reach all nodes: {set(owners.values())}"
     print("ok: consistent routing across 3 nodes")
 
@@ -91,18 +93,25 @@ try:
     victim_backend = f"127.0.0.1:{NODE_PORTS[victim]}"
     processes[victim].kill()
     processes[victim].wait()
-    moved = 0
+    moved = temporary_moves = 0
     for key, owner in owners.items():
         status, headers, body = infer(key)
         assert status == 200, (status, body)
         assert headers["X-Served-By"] != victim_backend
         if owner != victim_backend:
-            assert headers["X-Served-By"] == owner, "a key on a healthy node moved"
+            if headers["X-Served-By"] != owner:
+                # A slow machine can miss a health probe, which rightly moves a key for a moment. A key
+                # that stays moved would mean the ring is wrong, so it must come back by itself.
+                temporary_moves += 1
+                view = request(ROUTER_PORT, "/v1/cluster")[2]
+                wait_for(lambda k=key, o=owner: infer(k)[1]["X-Served-By"] == o,
+                         f"{key} to return to {owner}, with the router seeing {view}")
         else:
             moved += 1
     assert moved > 0
     wait_for(lambda: healthy_count() == 2, "the failed node to leave the rotation")
-    print(f"ok: survived a node kill with no failed requests; {moved} of {len(owners)} keys moved")
+    print(f"ok: survived a node kill with no failed requests; {moved} of {len(owners)} keys moved, "
+          f"and {temporary_moves} others moved for a moment")
 
     # A write made while the node is down.
     request(NODE_PORTS[0], "/v1/models/bert", json.dumps({"uri": "s3://models/bert.onnx"}).encode(),

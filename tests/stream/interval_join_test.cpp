@@ -59,8 +59,8 @@ TEST(IntervalJoinTest, OneEventCanMatchSeveral) {
 }
 
 TEST(IntervalJoinTest, MatchesABruteForceJoin) {
-  // Both sides are in time order with jitter, as real streams are, and compared with the definition.
-  // The seed is fixed so that a failure can be reproduced.
+  // Both sides are in time order with jitter, as real streams are, and compared with the
+  // definition. The seed is fixed so that a failure can be reproduced.
   // NOLINTNEXTLINE(bugprone-random-generator-seed)
   std::mt19937 rng(99);
   struct Item {
