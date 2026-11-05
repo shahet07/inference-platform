@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 2s
+scrape_configs:
+  - job_name: nodes
+    static_configs:
+      - targets:
+          - host.docker.internal:18701
+          - host.docker.internal:18702
+          - host.docker.internal:18703
+  - job_name: router
+    static_configs:
+      - targets: [host.docker.internal:18700]
