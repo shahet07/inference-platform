@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TARGETS = {"fuzz_traceparent": "traceparent", "fuzz_escape": "escape",
            "fuzz_registry": "registry", "fuzz_window": "window", "fuzz_wal": "wal", "fuzz_join": "window", "fuzz_sliding": "window",
-           "fuzz_raft_log": "raft_log"}
+           "fuzz_raft_log": "raft_log", "fuzz_http_parser": "http"}
 
 
 def main():

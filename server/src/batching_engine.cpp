@@ -1,5 +1,10 @@
 #include "server/batching_engine.h"
 
+#ifdef __linux__
+#include <pthread.h>
+#include <sched.h>
+#endif
+
 #include <algorithm>
 #include <exception>
 #include <functional>
@@ -15,6 +20,29 @@ using Clock = std::chrono::steady_clock;
 
 double secondsSince(Clock::time_point start) {
   return std::chrono::duration<double>(Clock::now() - start).count();
+}
+
+void pinToCore(std::size_t index) {
+#ifdef __linux__
+  // The allowed cores, which can be fewer than the machine has, as in a container.
+  cpu_set_t allowed;
+  CPU_ZERO(&allowed);
+  if (sched_getaffinity(0, sizeof(allowed), &allowed) != 0 || CPU_COUNT(&allowed) == 0) {
+    return;
+  }
+  std::size_t wanted = index % static_cast<std::size_t>(CPU_COUNT(&allowed));
+  for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+    if (CPU_ISSET(cpu, &allowed) && wanted-- == 0) {
+      cpu_set_t only;
+      CPU_ZERO(&only);
+      CPU_SET(cpu, &only);
+      (void)pthread_setaffinity_np(pthread_self(), sizeof(only), &only);
+      return;
+    }
+  }
+#else
+  (void)index;
+#endif
 }
 
 std::vector<double> batchSizeBuckets() { return {1, 2, 4, 8, 16, 32, 64, 128, 256}; }
@@ -56,7 +84,12 @@ BatchingEngine::BatchingEngine(BatchRunner runner, std::vector<std::int64_t> row
                                             obs::latencyBuckets(), config.metric_labels)) {
   workers_.reserve(config.workers);
   for (std::size_t i = 0; i < config.workers; ++i) {
-    workers_.emplace_back([this] { workerLoop(); });
+    workers_.emplace_back([this, i] {
+      if (config_.pin_workers) {
+        pinToCore(i);
+      }
+      workerLoop();
+    });
   }
 }
 
@@ -89,6 +122,43 @@ std::optional<std::future<std::vector<float>>> BatchingEngine::submit(
   return future;
 }
 
+bool BatchingEngine::submitAsync(std::vector<float> features, Completion done,
+                                 std::optional<std::chrono::steady_clock::time_point> deadline) {
+  if (features.size() != features_per_row_) {
+    throw std::invalid_argument("expected " + std::to_string(features_per_row_) +
+                                " features, got " + std::to_string(features.size()));
+  }
+  Request request{.features = std::move(features),
+                  .result = {},
+                  .enqueued_at = Clock::now(),
+                  .trace = {},
+                  .deadline = deadline,
+                  .done = std::move(done)};
+  if (!queue_.tryPush(request)) {
+    rejected_total_.add();
+    return false;
+  }
+  requests_total_.add();
+  queue_depth_.add(1);
+  return true;
+}
+
+void BatchingEngine::Request::succeed(std::vector<float> outputs) {
+  if (done) {
+    done(std::move(outputs), nullptr);
+  } else {
+    result.set_value(std::move(outputs));
+  }
+}
+
+void BatchingEngine::Request::fail(std::exception_ptr error) {
+  if (done) {
+    done({}, std::move(error));
+  } else {
+    result.set_exception(std::move(error));
+  }
+}
+
 void BatchingEngine::workerLoop() {
   perf::Arena arena(std::size_t{1024} * 1024);
   std::vector<Request> batch;
@@ -114,7 +184,7 @@ void BatchingEngine::runBatch(std::vector<Request>& batch, perf::Arena& arena) {
   const Clock::time_point now = Clock::now();
   const auto expired = std::ranges::remove_if(batch, [&](Request& request) {
     if (request.deadline && *request.deadline <= now) {
-      request.result.set_exception(std::make_exception_ptr(DeadlineExceeded{}));
+      request.fail(std::make_exception_ptr(DeadlineExceeded{}));
       deadline_exceeded_total_.add();
       return true;
     }
@@ -159,12 +229,11 @@ void BatchingEngine::runBatch(std::vector<Request>& batch, perf::Arena& arena) {
     const std::size_t per_row = outputs.size() / batch.size();
     for (std::size_t i = 0; i < batch.size(); ++i) {
       const auto begin = outputs.begin() + static_cast<std::ptrdiff_t>(i * per_row);
-      batch[i].result.set_value(
-          std::vector<float>(begin, begin + static_cast<std::ptrdiff_t>(per_row)));
+      batch[i].succeed(std::vector<float>(begin, begin + static_cast<std::ptrdiff_t>(per_row)));
     }
   } catch (...) {
     for (Request& request : batch) {
-      request.result.set_exception(std::current_exception());
+      request.fail(std::current_exception());
     }
   }
 }

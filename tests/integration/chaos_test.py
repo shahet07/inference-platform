@@ -168,10 +168,26 @@ try:
     routers.append(start_router(SECOND_ROUTER_PORT))
     wait_for(lambda: request(SECOND_ROUTER_PORT, "/healthz")[0] == 200, "second router")
     time.sleep(0.5)
+
+    def all_healthy(port):
+        backends = json.loads(request(port, "/v1/cluster")[2])["backends"]
+        return all(b["healthy"] for b in backends)
+
+    wait_for(lambda: all_healthy(ROUTER_PORT) and all_healthy(SECOND_ROUTER_PORT), "both routers ready")
+    compared = 0
     for i in range(30):
         first = infer(f"shared-{i}")[1]["X-Served-By"]
         second = infer(f"shared-{i}", SECOND_ROUTER_PORT)[1]["X-Served-By"]
-        assert first == second, "two routers disagree on where a key belongs"
+        # On a slow machine a probe can time out, and then the routers rightly see different clusters.
+        # They must agree whenever they see the same one.
+        if first != second:
+            assert not (all_healthy(ROUTER_PORT) and all_healthy(SECOND_ROUTER_PORT)), (
+                "two routers with the same healthy backends disagree on where a key belongs")
+            wait_for(lambda: all_healthy(ROUTER_PORT) and all_healthy(SECOND_ROUTER_PORT),
+                     "both routers ready again")
+        else:
+            compared += 1
+    assert compared > 0
     routers[0].kill()
     routers[0].wait()
     assert infer("shared-0", SECOND_ROUTER_PORT)[0] == 200

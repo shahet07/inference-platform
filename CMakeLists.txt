@@ -25,6 +25,7 @@ if(IP_ENABLE_CLANG_TIDY)
 endif()
 
 add_subdirectory(obs)
+add_subdirectory(net)
 add_subdirectory(perf)
 add_subdirectory(runtime)
 add_subdirectory(stream)

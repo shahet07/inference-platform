@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <random>
@@ -175,6 +176,9 @@ class Simulation {
     const auto [existing, inserted] = committed_.try_emplace(index, entry);
     ASSERT_TRUE(inserted || existing->second == entry)
         << "two different entries committed at index " << index;
+    if (inserted) {
+      commit_terms_[index] = live_.at(id)->term();
+    }
   }
 
   void checkSafety() {
@@ -183,9 +187,11 @@ class Simulation {
       if (node->role() == Role::kLeader) {
         const auto [existing, inserted] = leaders_.try_emplace(node->term(), id);
         ASSERT_TRUE(inserted || existing->second == id) << "two leaders in term " << node->term();
-        // Leader completeness: a leader holds every entry committed in an earlier term.
+        // Leader completeness: a leader holds every entry committed in an earlier term. That is the
+        // term it was committed in, not the term it was created in. An old leader stuck in a
+        // partition can rightly lack an old entry that a newer leader goes on to commit.
         for (const auto& [index, entry] : committed_) {
-          if (entry.term < node->term()) {
+          if (commit_terms_.at(index) < node->term()) {
             ASSERT_LE(index, node->lastIndex()) << "a leader is missing a committed entry";
             ASSERT_EQ(node->log()[index - 1], entry) << "a leader differs on a committed entry";
           }
@@ -224,6 +230,7 @@ class Simulation {
   std::uint64_t now_ = 0;
   std::map<Term, NodeId> leaders_;
   std::map<Index, LogEntry> committed_;
+  std::map<Index, Term> commit_terms_;  // The term of the node that first delivered each entry.
   std::map<std::string, std::pair<Index, Term>> proposed_;
 };
 
@@ -529,7 +536,10 @@ void runChaos(int nodes, std::uint64_t seed) {
 class RaftChaosTest : public testing::TestWithParam<int> {};
 
 TEST_P(RaftChaosTest, StaysSafeAndRecoversAcrossSeeds) {
-  for (std::uint64_t seed = 1; seed <= 300; ++seed) {
+  // RAFT_CHAOS_SEEDS runs more of them, for an occasional deep check.
+  const char* configured = std::getenv("RAFT_CHAOS_SEEDS");
+  const std::uint64_t seeds = configured != nullptr ? std::strtoull(configured, nullptr, 10) : 300;
+  for (std::uint64_t seed = 1; seed <= seeds; ++seed) {
     runChaos(GetParam(), seed);
     if (HasFatalFailure()) {
       FAIL() << "failed with seed " << seed;

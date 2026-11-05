@@ -9,6 +9,8 @@ void matmulNeon(const float* a, const float* b, float* out, std::size_t rows, st
                 std::size_t cols);
 void matmulNeonMicro(const float* a, const float* b, float* out, std::size_t rows,
                      std::size_t inner, std::size_t cols);
+void matmulNeonPacked(const float* a, const float* b, float* out, std::size_t rows,
+                      std::size_t inner, std::size_t cols);
 #endif
 #ifdef IP_HAS_AVX2_KERNEL
 void matmulAvx2(const float* a, const float* b, float* out, std::size_t rows, std::size_t inner,
@@ -52,6 +54,7 @@ std::vector<Kernel> availableKernels() {
 #ifdef IP_HAS_NEON_KERNEL
   kernels.push_back({.name = "neon", .matmul = matmulNeon});
   kernels.push_back({.name = "neon_micro", .matmul = matmulNeonMicro});
+  kernels.push_back({.name = "neon_packed", .matmul = matmulNeonPacked});
 #endif
 #ifdef IP_HAS_AVX2_KERNEL
   if (__builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma")) {

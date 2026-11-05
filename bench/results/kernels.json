@@ -1,89 +1,102 @@
 {
   "allocation": {
-    "arena_ns": 452.7729170251107,
-    "malloc_ns": 2437.19740690193
+    "arena_ns": 482.40357749305343,
+    "malloc_ns": 2510.4009438698663
   },
   "forward": [
     {
       "batch": 1,
-      "eigen_ns": 5235.442152654173,
-      "onnxruntime_ns": 7581.949658832449,
-      "ours_autovec_ns": 6968.4481605351175,
-      "ours_neon_micro_ns": 5285.24120071874,
-      "ours_neon_ns": 5232.349727919632
+      "eigen_ns": 5224.73448275862,
+      "onnxruntime_ns": 7725.391317781554,
+      "ours_autovec_ns": 7073.613665299194,
+      "ours_neon_micro_ns": 5446.913616557734,
+      "ours_neon_ns": 5336.4104589114195,
+      "ours_neon_packed_ns": 16256.799739921977
     },
     {
       "batch": 8,
-      "eigen_ns": 27445.137760702524,
-      "onnxruntime_ns": 16097.736401673641,
-      "ours_autovec_ns": 54557.47982551799,
-      "ours_neon_micro_ns": 27070.993502977803,
-      "ours_neon_ns": 39409.1804570528
+      "eigen_ns": 28008.841545352745,
+      "onnxruntime_ns": 16383.150393184796,
+      "ours_autovec_ns": 55749.070234113715,
+      "ours_neon_micro_ns": 27808.13451917732,
+      "ours_neon_ns": 39985.21183053557,
+      "ours_neon_packed_ns": 35813.379384395135
     },
     {
       "batch": 64,
-      "eigen_ns": 156878.52664576803,
-      "onnxruntime_ns": 114171.23287671233,
-      "ours_autovec_ns": 432335.4913793103,
-      "ours_neon_micro_ns": 213218.26382978723,
-      "ours_neon_ns": 312622.1375
+      "eigen_ns": 159330.41401273885,
+      "onnxruntime_ns": 115049.71264367815,
+      "ours_autovec_ns": 438502.5391304348,
+      "ours_neon_micro_ns": 216350.2155172414,
+      "ours_neon_ns": 319759.2929936306,
+      "ours_neon_packed_ns": 206977.96280991734
     },
     {
       "batch": 256,
-      "eigen_ns": 600884.9285714285,
-      "onnxruntime_ns": 441438.9561403509,
-      "ours_autovec_ns": 1729284.4827586208,
-      "ours_neon_micro_ns": 856311.4406779661,
-      "ours_neon_ns": 1251685.425
+      "eigen_ns": 615402.4390243902,
+      "onnxruntime_ns": 469038.9345794392,
+      "ours_autovec_ns": 1748798.8620689656,
+      "ours_neon_micro_ns": 859408.186440678,
+      "ours_neon_ns": 1267197.9,
+      "ours_neon_packed_ns": 801302.9047619047
     }
   ],
   "matmul_256": [
     {
-      "gflops": 8.734470899497461,
+      "gflops": 8.562590452069598,
       "impl": "scalar",
-      "ns": 3841610.1428571427
+      "ns": 3918724.3846153845
     },
     {
-      "gflops": 27.88254702379523,
+      "gflops": 27.514015174658574,
       "impl": "autovec",
-      "ns": 1203420.619047619
+      "ns": 1219539.6341463414
     },
     {
-      "gflops": 35.11500718645467,
+      "gflops": 34.27031919668066,
       "impl": "neon",
-      "ns": 955558.1698113207
+      "ns": 979110.5769230769
     },
     {
-      "gflops": 55.724438223694804,
+      "gflops": 54.47318765948815,
       "impl": "neon_micro",
-      "ns": 602149.3095238095
+      "ns": 615980.6951219512
     },
     {
-      "gflops": 76.755532724827,
+      "gflops": 62.535717459402164,
+      "impl": "neon_packed",
+      "ns": 536564.2765957447
+    },
+    {
+      "gflops": 75.71849210069769,
       "impl": "eigen",
-      "ns": 437159.7826086957
+      "ns": 443147.1238938053
     }
   ],
   "fit": {
     "eigen": {
-      "overhead_ns_per_call": 2899.5618137570186,
-      "ns_per_row": 2335.880338897154
+      "overhead_ns_per_call": 2831.8807394581045,
+      "ns_per_row": 2392.853743300516
     },
     "onnxruntime": {
-      "overhead_ns_per_call": 5880.54963341473,
-      "ns_per_row": 1701.4000254177195
+      "overhead_ns_per_call": 5916.3185991083865,
+      "ns_per_row": 1809.0727186731674
     },
     "ours_autovec": {
-      "overhead_ns_per_call": 214.26763269948788,
-      "ns_per_row": 6754.18052783563
+      "overhead_ns_per_call": 243.31857352011048,
+      "ns_per_row": 6830.295091779083
     },
     "ours_neon_micro": {
-      "overhead_ns_per_call": 1947.8835557099274,
-      "ns_per_row": 3337.357645008813
+      "overhead_ns_per_call": 2098.0458799925564,
+      "ns_per_row": 3348.8677365651774
     },
     "ours_neon": {
-      "overhead_ns_per_call": 344.29845234284585,
-      "ns_per_row": 4888.051275576786
+      "overhead_ns_per_call": 387.93402933852394,
+      "ns_per_row": 4948.4764295728955
+    },
+    "ours_neon_packed": {
+      "overhead_ns_per_call": 13178.187563365182,
+      "ns_per_row": 3078.6121765567955
     }
   }
 }

@@ -28,6 +28,7 @@
 #include <utility>
 
 #include "cluster/hash_ring.h"
+#include "obs/startup.h"
 
 namespace cluster {
 namespace {
@@ -43,15 +44,18 @@ class ClientPool {
 
   std::atomic<std::int64_t> in_flight{0};
 
-  std::unique_ptr<httplib::Client> acquire() {
+  // `reused` says whether this client has an existing connection, which may have since died.
+  std::unique_ptr<httplib::Client> acquire(bool& reused) {
     {
       const std::scoped_lock lock(mutex_);
       if (!idle_.empty()) {
         auto client = std::move(idle_.back());
         idle_.pop_back();
+        reused = true;
         return client;
       }
     }
+    reused = false;
     auto client = std::make_unique<httplib::Client>("http://" + backend_);
     client->set_keep_alive(true);
     client->set_tcp_nodelay(true);
@@ -135,9 +139,7 @@ struct Router::Impl {
 
   // Called last in the router's constructor, because the monitor's thread can call back at once.
   void startMonitor() {
-    // Building a client compiles a regex, and libstdc++ fills a shared locale cache the first time
-    // without a lock. Doing it once here means later clients on other threads only read that cache.
-    const httplib::Client prime("http://127.0.0.1:1");
+    obs::primeLocaleCaches();  // The monitor's thread is about to use the HTTP client.
     monitor = std::make_unique<HealthMonitor>(
         config.backends, probeHealthz,
         [this](const std::string& node, bool now_healthy) { onHealthChange(node, now_healthy); },
@@ -197,6 +199,11 @@ struct Router::Impl {
       down.erase(node);
     } else {
       down.insert(node);
+      // Connections to a node that went down are not worth trying when it comes back.
+      const auto pool = pools.find(node);
+      if (pool != pools.end()) {
+        pool->second->clear();
+      }
     }
     rebuildRotation();
     if (config.logger != nullptr) {
@@ -368,7 +375,8 @@ struct Router::Impl {
         continue;  // Removed since the candidates were chosen.
       }
       ClientPool& pool = *pool_ptr;
-      auto client = pool.acquire();
+      bool reused = false;
+      auto client = pool.acquire(reused);
       const auto started = std::chrono::steady_clock::now();
       // What is left of the request's own deadline can be less than the backend's allowance.
       const auto remaining =
@@ -387,6 +395,17 @@ struct Router::Impl {
       }
       pool.in_flight.fetch_add(1, std::memory_order_relaxed);
       auto response = client->Post(req.path, forwarded, req.body, content_type);
+      // A kept-alive connection can die while idle, for instance across a restart, and then fails
+      // at once. That says nothing about the backend, so it gets one try on a new connection,
+      // instead of the request moving to another node and this one being marked as failing.
+      if (!response && reused &&
+          std::chrono::steady_clock::now() - started < std::chrono::milliseconds(100)) {
+        pool.clear();
+        bool ignored = false;
+        client = pool.acquire(ignored);
+        client->set_read_timeout(deadline_limits ? remaining : config.backend_timeout);
+        response = client->Post(req.path, forwarded, req.body, content_type);
+      }
       pool.in_flight.fetch_sub(1, std::memory_order_relaxed);
       forward_seconds.observe(
           std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count());

@@ -1,0 +1,22 @@
+[
+  {
+    "lock_free_items_per_sec": 117803335.34227288,
+    "mutex_items_per_sec": 19093336.95190255,
+    "producers_and_consumers": 1
+  },
+  {
+    "lock_free_items_per_sec": 13683615.85977671,
+    "mutex_items_per_sec": 9521630.793319616,
+    "producers_and_consumers": 2
+  },
+  {
+    "lock_free_items_per_sec": 3842563.7591549186,
+    "mutex_items_per_sec": 12656407.1478344,
+    "producers_and_consumers": 4
+  },
+  {
+    "lock_free_items_per_sec": 2073017.394687145,
+    "mutex_items_per_sec": 12705292.210802238,
+    "producers_and_consumers": 8
+  }
+]

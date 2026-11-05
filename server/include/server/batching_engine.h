@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <future>
 #include <optional>
@@ -31,6 +32,9 @@ struct EngineConfig {
   bool use_arena = false;
   // When set, sampled requests record queue-wait and model-run spans. Must outlive the engine.
   obs::Tracer* tracer = nullptr;
+  // Gives each worker its own core, on Linux. Elsewhere this does nothing, and macOS has no such
+  // control. Can help when other work on the machine would otherwise move workers between cores.
+  bool pin_workers = false;
   // Added to this engine's metrics, like: model="resnet"
   std::string metric_labels;
 };
@@ -69,6 +73,15 @@ class BatchingEngine {
       std::vector<float> features, obs::TraceContext trace = {},
       std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt);
 
+  // Called on a worker thread when a request finishes, with its outputs or its error. Must be
+  // quick.
+  using Completion = std::function<void(std::vector<float>, std::exception_ptr)>;
+  // Like submit, for callers that must not block on a future, such as an event loop. Returns false
+  // if the queue is full, in which case `done` is not called.
+  [[nodiscard]] bool submitAsync(
+      std::vector<float> features, Completion done,
+      std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt);
+
   [[nodiscard]] std::size_t featuresPerRow() const { return features_per_row_; }
 
  private:
@@ -78,6 +91,10 @@ class BatchingEngine {
     std::chrono::steady_clock::time_point enqueued_at;
     obs::TraceContext trace;
     std::optional<std::chrono::steady_clock::time_point> deadline;
+    Completion done;  // When set, this is used in place of `result`.
+
+    void succeed(std::vector<float> outputs);
+    void fail(std::exception_ptr error);
   };
 
   void workerLoop();

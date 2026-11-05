@@ -17,10 +17,12 @@
 #include "cluster/router.h"
 #include "obs/log.h"
 #include "obs/metrics.h"
+#include "obs/startup.h"
 #include "obs/trace.h"
 
 int main(int argc, char** argv) {
   try {
+    obs::primeLocaleCaches();
     std::map<std::string, std::string> flags;
     const std::span args(argv, static_cast<std::size_t>(argc));
     for (std::size_t i = 1; i + 1 < args.size(); i += 2) {

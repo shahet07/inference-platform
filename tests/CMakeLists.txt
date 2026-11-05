@@ -14,7 +14,8 @@ add_executable(server_tests
   server/bounded_queue_test.cpp
   server/batching_engine_test.cpp
   server/http_server_test.cpp
-  server/model_manager_test.cpp)
+  server/model_manager_test.cpp
+  server/mpmc_queue_test.cpp)
 target_link_libraries(server_tests PRIVATE
   server GTest::gtest_main GTest::gmock httplib::httplib nlohmann_json::nlohmann_json)
 gtest_discover_tests(server_tests)
@@ -94,3 +95,13 @@ add_test(NAME integration.raft
   COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/raft_test.py
     $<TARGET_FILE:raft_node> 19700)
 set_tests_properties(integration.raft PROPERTIES TIMEOUT 240)
+
+add_executable(net_tests net/http_parser_test.cpp net/event_server_test.cpp)
+target_link_libraries(net_tests PRIVATE net GTest::gtest_main)
+gtest_discover_tests(net_tests)
+
+add_test(NAME integration.event_frontend
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/event_frontend_test.py
+    $<TARGET_FILE:inference_server> $<TARGET_FILE:load_gen>
+    ${CMAKE_SOURCE_DIR}/bench/models/mlp_quant.onnx 19800)
+set_tests_properties(integration.event_frontend PROPERTIES TIMEOUT 120)

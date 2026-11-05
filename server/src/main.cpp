@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <sys/resource.h>
 
 #include <chrono>
 #include <csignal>
@@ -19,9 +20,11 @@
 #include "cluster/replicator.h"
 #include "obs/log.h"
 #include "obs/metrics.h"
+#include "obs/startup.h"
 #include "obs/trace.h"
 #include "runtime/onnx_model.h"
 #include "server/batching_engine.h"
+#include "server/event_frontend.h"
 #include "server/http_server.h"
 #include "server/model_manager.h"
 #include "stream/processor.h"
@@ -60,6 +63,7 @@ server::LoadedBackend loadOnnx(const std::filesystem::path& path) {
 
 int main(int argc, char** argv) {
   try {
+    obs::primeLocaleCaches();
     const auto flags = parseFlags(std::span(argv, static_cast<std::size_t>(argc)));
     if (!flags.contains("model")) {
       std::cerr
@@ -67,11 +71,20 @@ int main(int argc, char** argv) {
              "  [--max-batch N] [--max-wait-us N] [--queue N] [--connections N]\n"
              "  [--tcp-nodelay 0|1] [--keep-alive-max N] [--events 0|1] [--window-ms N]\n"
              "  [--events-dir DIR] [--events-fsync always|interval|never] [--events-archive DIR]\n"
-             "  [--model-dir DIR] [--model-poll-ms N] [--arena 0|1] [--trace-file PATH] "
+             "  [--frontend httplib|event] [--event-threads N] [--pin-workers 0|1] [--model-dir "
+             "DIR] [--model-poll-ms N] [--arena 0|1] "
+             "[--trace-file PATH] "
              "[--trace-sample N] [--node-id ID] [--peers "
              "host:port,...] "
              "[--replication-interval-ms N]\n";
       return EXIT_FAILURE;
+    }
+
+    // Every connection needs a descriptor, and the default limit can be as low as 256.
+    rlimit limit{};
+    if (getrlimit(RLIMIT_NOFILE, &limit) == 0 && limit.rlim_cur < limit.rlim_max) {
+      limit.rlim_cur = limit.rlim_max == RLIM_INFINITY ? 1048576 : limit.rlim_max;
+      (void)setrlimit(RLIMIT_NOFILE, &limit);
     }
 
     // A client that disconnects mid-response must fail that one write, not kill the process.
@@ -100,7 +113,10 @@ int main(int argc, char** argv) {
         .queue_capacity = sizeFlag(flags, "queue", 1024),
         .use_arena = sizeFlag(flags, "arena", 0) != 0,
         .tracer = tracer.get(),
+        .pin_workers = sizeFlag(flags, "pin-workers", 0) != 0,
     };
+    // Declared before the manager, whose thread reads it, so that it is destroyed after.
+    cluster::ModelRegistry models(node_id);
     server::ModelManager manager(loadOnnx, config, registry, &logger);
     manager.load("default", flags.at("model"), 0);
 
@@ -141,7 +157,6 @@ int main(int argc, char** argv) {
       http.attachEventStream(*events, *processor);
     }
 
-    cluster::ModelRegistry models(node_id);
     http.attachLogger(logger);
     if (tracer) {
       http.attachTracer(*tracer);
@@ -168,7 +183,16 @@ int main(int argc, char** argv) {
     }
 
     const std::string host = flags.contains("host") ? flags.at("host") : "127.0.0.1";
-    const int port = http.bind(host, static_cast<int>(sizeFlag(flags, "port", 8080)));
+    // The event frontend serves requests and metrics only, with no tracing, event recording, or
+    // model management endpoints, so those flags have no effect with it.
+    std::unique_ptr<server::EventFrontend> frontend;
+    if (flags.contains("frontend") && flags.at("frontend") == "event") {
+      frontend = std::make_unique<server::EventFrontend>(manager, registry,
+                                                         sizeFlag(flags, "event-threads", 2));
+    }
+    const int requested_port = static_cast<int>(sizeFlag(flags, "port", 8080));
+    const int port =
+        frontend ? frontend->bind(host, requested_port) : http.bind(host, requested_port);
     if (port < 0) {
       logger.error("failed to bind", {{"host", host}});
       return EXIT_FAILURE;
@@ -180,11 +204,21 @@ int main(int argc, char** argv) {
                             {"workers", static_cast<std::int64_t>(config.workers)},
                             {"max_batch", static_cast<std::int64_t>(config.max_batch_size)}});
 
-    std::thread serving([&http] { http.serve(); });
+    std::thread serving([&] {
+      if (frontend) {
+        frontend->serve();
+      } else {
+        http.serve();
+      }
+    });
     int received = 0;
     sigwait(&signals, &received);
     logger.info("shutting down", {{"signal", std::int64_t{received}}});
-    http.stop();
+    if (frontend) {
+      frontend->stop();
+    } else {
+      http.stop();
+    }
     serving.join();
     logger.info("stopped");
     return EXIT_SUCCESS;

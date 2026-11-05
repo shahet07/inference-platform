@@ -114,6 +114,31 @@ Bugs these tools found during development:
   with route setup inside libstdc++'s regex code.
 - libFuzzer with UBSan: signed overflow in window arithmetic for timestamps near the 64-bit limits.
 
+### Event-driven frontend
+
+`net/` is an HTTP/1.1 server on kqueue and epoll, where a few threads handle many sockets. `--frontend event` uses it in
+place of the thread-per-connection library. Light model, raw floats, 4 workers, median of 3 runs on this Mac.
+
+| Frontend | Connections | Requests/s | p50 ms | p99 ms | RSS MB | Threads |
+| --- | --- | --- | --- | --- | --- | --- |
+| Thread per connection | 16 | 35,897 | 0.40 | 1.00 | 32 | 262 |
+| Thread per connection | 64 | 32,844 | 1.53 | 6.97 | 34 | 262 |
+| Thread per connection | 256 | 27,960 | 8.15 | 28.14 | 40 | 278 |
+| Thread per connection | 1,000 | 22,916 | 42.51 | 93.24 | 72 | 1,022 |
+| Event-driven | 16 | 46,186 | 0.34 | 0.57 | 28 | 10 |
+| Event-driven | 64 | 44,567 | 1.03 | 7.37 | 28 | 10 |
+| Event-driven | 256 | 39,462 | 5.96 | 15.98 | 29 | 10 |
+| Event-driven | 1,000 | 32,928 | 29.14 | 72.65 | 29 | 10 |
+
+**29 to 44% more throughput, with 10 threads instead of up to 1,022, and 29 MB instead of 72 MB at 1,000
+connections.** Connections share one read buffer per thread, and release their buffers when idle. Before that, this
+frontend used 135 MB at 1,000 connections. The load generator uses a thread per connection on the same machine, which
+limits both frontends at high counts.
+
+The parser is strict by design, because framing ambiguity is how request smuggling works: duplicate lengths, spaces
+before colons, and folded headers are all rejected, with tests for each. It ran about 12M fuzz iterations with no
+failures.
+
 ### A real model: MobileNetV2
 
 The synthetic models above might mislead, so this repeats the questions on MobileNetV2 from the ONNX Model
@@ -384,6 +409,16 @@ maximum of 3 under load and back to 1 when idle, with 184,461 requests in the re
 - **A deadline could return the wrong status.** A read timeout could fire just before the deadline clock expired,
   which returned 503 and counted against the backend.
 
+- **A use-after-free on every shutdown with `--model-dir`.** The model registry was destroyed before the thread that
+  reads it. macOS timing hid this, and ThreadSanitizer on Linux found it.
+- **Stale connections looked like failing backends.** After an outage, a pooled connection failed at once, so the request
+  moved to another node, and a healthy backend was counted as failing. Linux TSan and ASan both exposed this through
+  routers disagreeing on where a key belongs. Routers now retry once on a new connection first.
+- **A wrong test, caught by testing on a second platform.** Random number libraries differ, so Linux explored different Raft
+  scenarios, and one reported a leader missing a committed entry. The check was wrong: it used an entry's creation
+  term, and the guarantee is about the term it was committed in. With the check corrected, 6,000 scenarios pass on each
+  platform, and the five deliberately injected bugs are all still caught.
+
 **Unexplained:** in one sanitizer run, the exactly-once and autoscale tests timed out. They then passed 8 of 8
 repeat runs alone, and the cause was not found.
 
@@ -484,6 +519,35 @@ predicted this, and the plan's condition of optimizing where profiling shows it 
 
 Its correctness tests pass on x86-64, but **its speed has not been measured**. It also has only the simpler design, not the micro-kernel. The plan's
 Phase 4 assumed AVX2, and NEON took its place here.
+
+### Packed kernel
+
+Adding packing and cache blocking to the micro-kernel raised 256 × 256 × 256 multiplication from about 55 to about
+62.5 GFLOPS, which narrows the gap to Eigen's 76 from 1.4× to 1.2×. **So packing explains part of that gap, and not
+all of it.** It also has a cost: a single-row forward pass went from about 5 to 16 µs, since copying costs more than it
+saves on small inputs. Run `bench/run_kernels_bench.py` for the full table.
+
+### Lock-free queue
+
+Items per second, handing over small integers, spinning when full or empty.
+
+| Producer and consumer pairs | Mutex queue | Lock-free queue | Lock-free relative |
+| --- | --- | --- | --- |
+| 1 | 19.09M | 117.80M | 6.17× |
+| 2 | 9.52M | 13.68M | 1.44× |
+| 4 | 12.66M | 3.84M | 0.30× |
+| 8 | 12.71M | 2.07M | 0.16× |
+
+**The lock-free queue is much faster with one pair, and much slower under contention**, on this machine, when threads
+outnumber performance cores and spin. That also supports what the engine does: it keeps the mutex queue, which also
+lets idle workers sleep. Writing the queue's test found a real bug: with capacity 1, this design cannot tell a full slot
+from a free one, so a push overwrote a value. Capacity is now at least 2.
+
+### Core pinning
+
+`--pin-workers 1` gives each worker its own core, on Linux. It has not been benchmarked: macOS has no such control, and
+the Linux environment here is a virtual machine. NUMA placement is not implemented, since it needs a multi-socket server
+to test.
 
 ## Phase 5: observability
 

@@ -1,5 +1,5 @@
 add_executable(load_gen load_gen.cpp)
-target_link_libraries(load_gen PRIVATE httplib::httplib nlohmann_json::nlohmann_json)
+target_link_libraries(load_gen PRIVATE obs httplib::httplib nlohmann_json::nlohmann_json)
 
 add_executable(stream_bench stream_bench.cpp)
 target_link_libraries(stream_bench PRIVATE stream nlohmann_json::nlohmann_json)
@@ -16,3 +16,6 @@ target_link_libraries(wal_bench PRIVATE stream nlohmann_json::nlohmann_json)
 
 add_executable(stream_ops_bench stream_ops_bench.cpp)
 target_link_libraries(stream_ops_bench PRIVATE stream nlohmann_json::nlohmann_json)
+
+add_executable(queue_bench queue_bench.cpp)
+target_link_libraries(queue_bench PRIVATE server nlohmann_json::nlohmann_json)

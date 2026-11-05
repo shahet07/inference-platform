@@ -33,6 +33,7 @@
 
 #include "consensus/file_storage.h"
 #include "consensus/raft.h"
+#include "obs/startup.h"
 
 namespace {
 
@@ -439,6 +440,7 @@ class RaftServer {
 
 int main(int argc, char** argv) {
   try {
+    obs::primeLocaleCaches();
     std::map<std::string, std::string> flags;
     const std::span args(argv, static_cast<std::size_t>(argc));
     for (std::size_t i = 1; i + 1 < args.size(); i += 2) {

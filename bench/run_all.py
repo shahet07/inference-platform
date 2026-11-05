@@ -13,6 +13,7 @@ SCRIPTS = [
     "run_nodelay_ab.py",
     "run_batch_wait_sweep.py",
     "run_server_bench.py",
+    "run_frontend_bench.py",
     "run_stream_bench.py",
     "run_cluster_bench.py",
     "run_cluster_bottleneck.py",
@@ -23,6 +24,7 @@ SCRIPTS = [
     "run_real_model_bench.py",
     "run_kernels_bench.py",
     "run_arena_ab.py",
+    "run_queue_bench.py",
     "run_tracing_overhead.py",
 ]
 if sys.platform == "darwin":

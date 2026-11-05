@@ -50,12 +50,23 @@ reaches the model, so overload does not spend compute on answers no client will 
 **Raw floats as well as JSON.** JSON stays as the easy default, and `application/octet-stream` skips text
 encoding. On a real image model the difference is 18.7×.
 
+**The engine keeps its mutex queue.** A lock-free queue was built and measured. It is far faster with one producer and
+one consumer and far slower under contention, and it cannot let idle workers sleep.
+
 **ONNX Runtime uses one thread per inference.** Concurrency comes from the worker pool. Letting
 ONNX Runtime also start a thread pool per inference would oversubscribe the cores.
 
-**A blocking thread per connection.** This comes from `cpp-httplib` and is the simplest model that
-works, but it costs a thread per connection and system calls per request. It is the first thing to
-replace if the HTTP layer needs to go faster. See the profile in benchmarks.md.
+**Two HTTP frontends.** The default uses `cpp-httplib`, with a blocking thread per connection: simple, and with every
+feature. `--frontend event` uses `net/`, where a few threads watch many sockets. It is faster and scales to far more
+connections, but serves only inference and metrics, with no tracing, event recording, or model management endpoints.
+
+**An event loop thread must not block.** So the engine has `submitAsync`, whose completion posts the response back to
+the connection's loop. One limit remains: JSON is parsed on the loop thread, so a huge JSON body delays that loop's other
+connections. Raw floats avoid this.
+
+**A connection handles one request at a time.** Pipelined requests wait their turn, which keeps responses in order
+without tagging them, at some cost to clients that pipeline. Reading stops at a bounded backlog, so a client that sends
+without reading responses is slowed by TCP, rather than growing a buffer.
 
 **Shapes validated before ONNX Runtime sees them.** It only checks that the buffer is large enough,
 so a shape smaller than the input silently ignores the rest.
@@ -169,6 +180,9 @@ small part of the total. The library stays for allocation-heavy work.
 
 **Our kernels are not used in serving.** ONNX Runtime is faster on batches, so replacing it would make
 the server slower. The kernels exist to find out where that gap comes from.
+
+**The packed kernel is not always the best one.** It is fastest on large matrices, and about 3 times slower on a single
+row, where copying costs more than it saves. `perf::best()` picks by architecture, not size.
 
 **AVX2 is tested for correctness only.** Its tests run in CI on x86-64, but its speed has not been
 benchmarked.

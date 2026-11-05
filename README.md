@@ -27,7 +27,8 @@ model. [Read the caveats](docs/benchmarks.md#read-this-first) before quoting the
 | Directory | Contents |
 | --- | --- |
 | `runtime/` | Model loading and inference, on ONNX Runtime |
-| `server/` | Bounded queue, batching engine, HTTP server |
+| `server/` | Bounded queue, batching engine, model management, HTTP frontends |
+| `net/` | Event-driven HTTP server on kqueue and epoll |
 | `stream/` | Sharded log, consumer groups, windowed aggregation |
 | `cluster/` | Hash ring, health checks, router, metadata replication |
 | `consensus/` | Raft: leader election and a replicated log |
@@ -84,6 +85,9 @@ To serve more models, or replace one with no downtime, start with `--model-dir D
 curl -X PUT localhost:8080/v1/models/resnet -d '{"uri":"resnet-v2.onnx"}'
 curl -s localhost:8080/v1/loaded
 ```
+
+Add `--frontend event` for the event-driven server, which handles many more connections per thread, but only serves
+inference and metrics.
 
 Run routers with `--balance least-loaded` to ignore keys, and `--discover-dns name:port` to find nodes through DNS.
 `ops/autoscaler.py` adds and removes local nodes, and `ops/k8s/` holds Kubernetes manifests.

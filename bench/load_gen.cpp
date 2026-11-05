@@ -21,6 +21,8 @@
 #include <thread>
 #include <vector>
 
+#include "obs/startup.h"
+
 namespace {
 
 using Clock = std::chrono::steady_clock;
@@ -163,6 +165,13 @@ Options parseOptions(std::span<char*> args) {
 
 int main(int argc, char** argv) {
   try {
+    obs::primeLocaleCaches();
+    // Every connection needs a descriptor, and the default limit can be as low as 256.
+    rlimit limit{};
+    if (getrlimit(RLIMIT_NOFILE, &limit) == 0 && limit.rlim_cur < limit.rlim_max) {
+      limit.rlim_cur = limit.rlim_max == RLIM_INFINITY ? 1048576 : limit.rlim_max;
+      (void)setrlimit(RLIMIT_NOFILE, &limit);
+    }
     // The server may close a keep-alive connection while a request is being written.
     std::signal(SIGPIPE, SIG_IGN);
     const Options options = parseOptions(std::span(argv, static_cast<std::size_t>(argc)));
