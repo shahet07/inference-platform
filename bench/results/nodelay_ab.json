@@ -1,0 +1,217 @@
+{
+  "baseline": {
+    "median_rps": 29958.125,
+    "median_p50_ms": 1.967417,
+    "median_p99_ms": 6.013375,
+    "runs": [
+      {
+        "client_cpu_seconds": 45.563217,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 244423,
+        "p50_ms": 2.006208,
+        "p999_ms": 10.445583,
+        "p99_ms": 5.19125,
+        "rejected": 0,
+        "throughput_rps": 30552.875
+      },
+      {
+        "client_cpu_seconds": 50.332187999999995,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 239665,
+        "p50_ms": 1.859625,
+        "p999_ms": 11.329209,
+        "p99_ms": 6.013375,
+        "rejected": 0,
+        "throughput_rps": 29958.125
+      },
+      {
+        "client_cpu_seconds": 52.536787,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 238433,
+        "p50_ms": 1.967417,
+        "p999_ms": 15.06525,
+        "p99_ms": 6.125667,
+        "rejected": 0,
+        "throughput_rps": 29804.125
+      }
+    ]
+  },
+  "nodelay_server_only": {
+    "median_rps": 31448.125,
+    "median_p50_ms": 1.883625,
+    "median_p99_ms": 5.599834,
+    "runs": [
+      {
+        "client_cpu_seconds": 41.977336,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 251585,
+        "p50_ms": 1.878167,
+        "p999_ms": 9.94575,
+        "p99_ms": 5.479292,
+        "rejected": 0,
+        "throughput_rps": 31448.125
+      },
+      {
+        "client_cpu_seconds": 41.230152000000004,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 251811,
+        "p50_ms": 1.883625,
+        "p999_ms": 9.668708,
+        "p99_ms": 5.599834,
+        "rejected": 0,
+        "throughput_rps": 31476.375
+      },
+      {
+        "client_cpu_seconds": 43.485362,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 243990,
+        "p50_ms": 1.93275,
+        "p999_ms": 10.764459,
+        "p99_ms": 5.666334,
+        "rejected": 0,
+        "throughput_rps": 30498.75
+      }
+    ]
+  },
+  "nodelay_both": {
+    "median_rps": 31290.375,
+    "median_p50_ms": 1.902459,
+    "median_p99_ms": 5.51025,
+    "runs": [
+      {
+        "client_cpu_seconds": 42.052887,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 256664,
+        "p50_ms": 1.840125,
+        "p999_ms": 14.245833,
+        "p99_ms": 5.475041,
+        "rejected": 0,
+        "throughput_rps": 32083.0
+      },
+      {
+        "client_cpu_seconds": 44.110710999999995,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 240654,
+        "p50_ms": 1.974333,
+        "p999_ms": 11.343959,
+        "p99_ms": 5.810541,
+        "rejected": 0,
+        "throughput_rps": 30081.75
+      },
+      {
+        "client_cpu_seconds": 44.785394,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 250323,
+        "p50_ms": 1.902459,
+        "p999_ms": 11.137,
+        "p99_ms": 5.51025,
+        "rejected": 0,
+        "throughput_rps": 31290.375
+      }
+    ]
+  },
+  "keepalive_only": {
+    "median_rps": 32267.0,
+    "median_p50_ms": 1.436459,
+    "median_p99_ms": 7.369375,
+    "runs": [
+      {
+        "client_cpu_seconds": 46.9216,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 268142,
+        "p50_ms": 1.679541,
+        "p999_ms": 9.771792,
+        "p99_ms": 6.017875,
+        "rejected": 0,
+        "throughput_rps": 33517.75
+      },
+      {
+        "client_cpu_seconds": 50.977272,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 256883,
+        "p50_ms": 1.436459,
+        "p999_ms": 13.560167,
+        "p99_ms": 7.369375,
+        "rejected": 0,
+        "throughput_rps": 32110.375
+      },
+      {
+        "client_cpu_seconds": 48.759781,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 258136,
+        "p50_ms": 1.434375,
+        "p999_ms": 19.23175,
+        "p99_ms": 7.947833,
+        "rejected": 0,
+        "throughput_rps": 32267.0
+      }
+    ]
+  },
+  "both_fixes": {
+    "median_rps": 33074.75,
+    "median_p50_ms": 1.520709,
+    "median_p99_ms": 6.869167,
+    "runs": [
+      {
+        "client_cpu_seconds": 50.577868,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 261447,
+        "p50_ms": 1.483041,
+        "p999_ms": 12.362833,
+        "p99_ms": 6.869167,
+        "rejected": 0,
+        "throughput_rps": 32680.875
+      },
+      {
+        "client_cpu_seconds": 49.633408,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 264598,
+        "p50_ms": 1.52075,
+        "p999_ms": 19.0035,
+        "p99_ms": 7.451667,
+        "rejected": 0,
+        "throughput_rps": 33074.75
+      },
+      {
+        "client_cpu_seconds": 49.526057,
+        "connections": 64,
+        "errors": 0,
+        "offered_rate": 0.0,
+        "ok": 267402,
+        "p50_ms": 1.520709,
+        "p999_ms": 13.247959,
+        "p99_ms": 6.609583,
+        "rejected": 0,
+        "throughput_rps": 33425.25
+      }
+    ]
+  }
+}

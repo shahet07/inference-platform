@@ -1,0 +1,251 @@
+{
+  "light": {
+    "direct": {
+      "rps": 32870.0,
+      "rps_min": 32811.833333333336,
+      "rps_max": 33247.5,
+      "p50_ms": 1.502833,
+      "p99_ms": 6.696458,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 5.6383413749999995,
+      "router_cores": 0.0,
+      "client_cores": 5.215081,
+      "node_requests_last_run": [
+        261767.0
+      ]
+    },
+    "1_nodes": {
+      "rps": 20493.0,
+      "rps_min": 20384.333333333332,
+      "rps_max": 21842.0,
+      "p50_ms": 2.8625,
+      "p99_ms": 7.77525,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 2.675699375,
+      "router_cores": 5.694093375,
+      "client_cores": 2.1228665,
+      "node_requests_last_run": [
+        154017.0
+      ]
+    },
+    "2_nodes": {
+      "rps": 21439.166666666668,
+      "rps_min": 21365.666666666668,
+      "rps_max": 21810.833333333332,
+      "p50_ms": 2.713542,
+      "p99_ms": 7.623042,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 2.600199,
+      "router_cores": 6.05271475,
+      "client_cores": 1.952631,
+      "node_requests_last_run": [
+        88142.0,
+        73576.0
+      ]
+    },
+    "3_nodes": {
+      "rps": 21724.333333333332,
+      "rps_min": 21640.833333333332,
+      "rps_max": 21742.0,
+      "p50_ms": 2.677833,
+      "p99_ms": 8.195541,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 2.571940375,
+      "router_cores": 6.0957423749999995,
+      "client_cores": 1.920011,
+      "node_requests_last_run": [
+        39805.0,
+        50414.0,
+        82449.0
+      ]
+    },
+    "4_nodes": {
+      "rps": 21649.5,
+      "rps_min": 21308.833333333332,
+      "rps_max": 21955.166666666668,
+      "p50_ms": 2.505667,
+      "p99_ms": 9.024709,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 2.578755875,
+      "router_cores": 5.977714625,
+      "client_cores": 1.9695299999999998,
+      "node_requests_last_run": [
+        48373.0,
+        64120.0,
+        29473.0,
+        29750.0
+      ]
+    }
+  },
+  "heavy": {
+    "direct": {
+      "rps": 7787.5,
+      "rps_min": 7748.0,
+      "rps_max": 8812.5,
+      "p50_ms": 4.160834,
+      "p99_ms": 4.257292,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 1.53529725,
+      "router_cores": 0.0,
+      "client_cores": 0.237328875,
+      "node_requests_last_run": [
+        62246.0
+      ]
+    },
+    "1_nodes": {
+      "rps": 8370.166666666666,
+      "rps_min": 8336.0,
+      "rps_max": 8393.5,
+      "p50_ms": 3.778625,
+      "p99_ms": 4.151917,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 1.534735125,
+      "router_cores": 0.80461125,
+      "client_cores": 0.59058,
+      "node_requests_last_run": [
+        63184.0
+      ]
+    },
+    "2_nodes": {
+      "rps": 15942.166666666666,
+      "rps_min": 15788.833333333334,
+      "rps_max": 15975.833333333334,
+      "p50_ms": 2.136292,
+      "p99_ms": 3.074417,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 3.8779693749999997,
+      "router_cores": 2.609135,
+      "client_cores": 1.221778625,
+      "node_requests_last_run": [
+        63787.0,
+        63672.0
+      ]
+    },
+    "3_nodes": {
+      "rps": 17619.833333333332,
+      "rps_min": 17321.833333333332,
+      "rps_max": 17705.166666666668,
+      "p50_ms": 1.444625,
+      "p99_ms": 6.534125,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 4.81654475,
+      "router_cores": 3.589657,
+      "client_cores": 1.4906075,
+      "node_requests_last_run": [
+        55438.0,
+        26649.0,
+        58879.0
+      ]
+    },
+    "4_nodes": {
+      "rps": 18257.833333333332,
+      "rps_min": 18018.833333333332,
+      "rps_max": 18436.5,
+      "p50_ms": 1.15425,
+      "p99_ms": 12.395833,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 4.94331125,
+      "router_cores": 3.8687272499999996,
+      "client_cores": 1.509575,
+      "node_requests_last_run": [
+        20772.0,
+        35378.0,
+        42141.0,
+        46524.0
+      ]
+    }
+  },
+  "xl": {
+    "direct": {
+      "rps": 2315.8333333333335,
+      "rps_min": 2301.8333333333335,
+      "rps_max": 2324.3333333333335,
+      "p50_ms": 13.667292,
+      "p99_ms": 14.55725,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 1.236474875,
+      "router_cores": 0.0,
+      "client_cores": 0.0822605,
+      "node_requests_last_run": [
+        18485.0
+      ]
+    },
+    "1_nodes": {
+      "rps": 2294.5,
+      "rps_min": 2293.3333333333335,
+      "rps_max": 2328.5,
+      "p50_ms": 13.718,
+      "p99_ms": 15.066125,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 1.170593,
+      "router_cores": 0.405852875,
+      "client_cores": 0.361071875,
+      "node_requests_last_run": [
+        18139.0
+      ]
+    },
+    "2_nodes": {
+      "rps": 4242.333333333333,
+      "rps_min": 4190.166666666667,
+      "rps_max": 4245.5,
+      "p50_ms": 8.634584,
+      "p99_ms": 11.45125,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 2.3871151250000002,
+      "router_cores": 0.305443375,
+      "client_cores": 0.161528,
+      "node_requests_last_run": [
+        16705.0,
+        16838.0
+      ]
+    },
+    "3_nodes": {
+      "rps": 4717.166666666667,
+      "rps_min": 4597.0,
+      "rps_max": 4754.666666666667,
+      "p50_ms": 6.999458,
+      "p99_ms": 11.969167,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 3.501137625,
+      "router_cores": 0.382572625,
+      "client_cores": 0.195667,
+      "node_requests_last_run": [
+        11896.0,
+        12734.0,
+        12886.0
+      ]
+    },
+    "4_nodes": {
+      "rps": 5092.166666666667,
+      "rps_min": 4987.166666666667,
+      "rps_max": 5098.5,
+      "p50_ms": 6.780166,
+      "p99_ms": 10.596166,
+      "errors": 0,
+      "rejected": 0,
+      "node_cores": 4.661880375,
+      "router_cores": 0.562800875,
+      "client_cores": 0.2891185,
+      "node_requests_last_run": [
+        10226.0,
+        10257.0,
+        10247.0,
+        10209.0
+      ]
+    }
+  }
+}

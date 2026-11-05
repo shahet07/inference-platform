@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" role="img" aria-label="Inference alone, with no networking">
+
+<style>
+  :root { --surface:#fcfcfb; --text:#0b0b0b; --muted:#52514e; --grid:#e4e3df; --ideal:#8a8983;
+          --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --surface:#1a1a19; --text:#f0efec; --muted:#c3c2b7; --grid:#3a3a37; --ideal:#8a8983;
+            --s1:#3987e5; --s2:#d95926; --s3:#199e70; }
+  }
+  text { font: 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--muted); }
+  .title { font-size: 16px; font-weight: 600; fill: var(--text); }
+  .label { fill: var(--text); }
+  .hit { fill: transparent; }
+</style>
+
+<rect width="720" height="400" fill="var(--surface)"/>
+<text class="title" x="64" y="28">Inference alone, with no networking</text>
+<line x1="64" x2="570" y1="344.0" y2="344.0" stroke="var(--grid)"/>
+<text x="54" y="348.0" text-anchor="end">0.0x</text>
+<line x1="64" x2="570" y1="272.0" y2="272.0" stroke="var(--grid)"/>
+<text x="54" y="276.0" text-anchor="end">2.0x</text>
+<line x1="64" x2="570" y1="200.0" y2="200.0" stroke="var(--grid)"/>
+<text x="54" y="204.0" text-anchor="end">4.0x</text>
+<line x1="64" x2="570" y1="128.0" y2="128.0" stroke="var(--grid)"/>
+<text x="54" y="132.0" text-anchor="end">6.0x</text>
+<line x1="64" x2="570" y1="56.0" y2="56.0" stroke="var(--grid)"/>
+<text x="54" y="60.0" text-anchor="end">8.0x</text>
+<text x="64.0" y="366" text-anchor="middle">1</text>
+<text x="136.3" y="366" text-anchor="middle">2</text>
+<text x="208.6" y="366" text-anchor="middle">3</text>
+<text x="280.9" y="366" text-anchor="middle">4</text>
+<text x="425.4" y="366" text-anchor="middle">6</text>
+<text x="570.0" y="366" text-anchor="middle">8</text>
+<text x="317.0" y="388" text-anchor="middle">Independent processes</text>
+<text x="64" y="46">Throughput vs 1 process</text>
+<polyline points="64.0,308.0 136.3,272.0 208.6,236.0 280.9,200.0 425.4,128.0 570.0,56.0" fill="none" stroke="var(--ideal)" stroke-width="2" stroke-dasharray="4 5"/>
+<text x="580.0" y="60.0">ideal</text>
+<polyline points="64.0,308.0 136.3,272.5 208.6,239.3 280.9,205.4 425.4,134.8 570.0,67.9" fill="none" stroke="var(--s3)" stroke-width="2" stroke-linejoin="round"/>
+<g><title>Light model, 1: 1.0x</title><circle class="hit" cx="64.0" cy="308.0" r="14"/><circle cx="64.0" cy="308.0" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Light model, 2: 2.0x</title><circle class="hit" cx="136.3" cy="272.5" r="14"/><circle cx="136.3" cy="272.5" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Light model, 3: 2.9x</title><circle class="hit" cx="208.6" cy="239.3" r="14"/><circle cx="208.6" cy="239.3" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Light model, 4: 3.8x</title><circle class="hit" cx="280.9" cy="205.4" r="14"/><circle cx="280.9" cy="205.4" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Light model, 6: 5.8x</title><circle class="hit" cx="425.4" cy="134.8" r="14"/><circle cx="425.4" cy="134.8" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Light model, 8: 7.7x</title><circle class="hit" cx="570.0" cy="67.9" r="14"/><circle cx="570.0" cy="67.9" r="4.5" fill="var(--s3)" stroke="var(--surface)" stroke-width="2"/></g>
+<text class="label" x="580.0" y="71.9">Light model 7.7x</text>
+<polyline points="64.0,308.0 136.3,273.4 208.6,237.1 280.9,203.2 425.4,191.9 570.0,219.0" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round"/>
+<g><title>Heavy model, 1: 1.0x</title><circle class="hit" cx="64.0" cy="308.0" r="14"/><circle cx="64.0" cy="308.0" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Heavy model, 2: 2.0x</title><circle class="hit" cx="136.3" cy="273.4" r="14"/><circle cx="136.3" cy="273.4" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Heavy model, 3: 3.0x</title><circle class="hit" cx="208.6" cy="237.1" r="14"/><circle cx="208.6" cy="237.1" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Heavy model, 4: 3.9x</title><circle class="hit" cx="280.9" cy="203.2" r="14"/><circle cx="280.9" cy="203.2" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Heavy model, 6: 4.2x</title><circle class="hit" cx="425.4" cy="191.9" r="14"/><circle cx="425.4" cy="191.9" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>Heavy model, 8: 3.5x</title><circle class="hit" cx="570.0" cy="219.0" r="14"/><circle cx="570.0" cy="219.0" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>
+<text class="label" x="580.0" y="223.0">Heavy model 3.5x</text>
+<polyline points="64.0,308.0 136.3,271.6 208.6,262.1 280.9,254.8 425.4,256.0 570.0,254.1" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>
+<g><title>XL model, 1: 1.0x</title><circle class="hit" cx="64.0" cy="308.0" r="14"/><circle cx="64.0" cy="308.0" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>XL model, 2: 2.0x</title><circle class="hit" cx="136.3" cy="271.6" r="14"/><circle cx="136.3" cy="271.6" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>XL model, 3: 2.3x</title><circle class="hit" cx="208.6" cy="262.1" r="14"/><circle cx="208.6" cy="262.1" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>XL model, 4: 2.5x</title><circle class="hit" cx="280.9" cy="254.8" r="14"/><circle cx="280.9" cy="254.8" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>XL model, 6: 2.4x</title><circle class="hit" cx="425.4" cy="256.0" r="14"/><circle cx="425.4" cy="256.0" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
+<g><title>XL model, 8: 2.5x</title><circle class="hit" cx="570.0" cy="254.1" r="14"/><circle cx="570.0" cy="254.1" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/></g>
+<text class="label" x="580.0" y="258.1">XL model 2.5x</text>
+</svg>

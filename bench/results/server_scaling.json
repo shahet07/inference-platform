@@ -1,0 +1,58 @@
+[
+  {
+    "workers": 1,
+    "connections": 64,
+    "rps": 28323.125,
+    "rps_min": 26707.75,
+    "rps_max": 28453.875,
+    "p50_ms": 2.279709,
+    "p99_ms": 4.859167,
+    "p99_ms_min": 4.34825,
+    "p99_ms_max": 4.984542,
+    "server_cpu_cores": 5.275289958137452,
+    "mean_batch": 7.0062692901234565,
+    "errors": 0
+  },
+  {
+    "workers": 4,
+    "connections": 64,
+    "rps": 32580.0,
+    "rps_min": 32538.25,
+    "rps_max": 33419.125,
+    "p50_ms": 1.403791,
+    "p99_ms": 6.583625,
+    "p99_ms_min": 6.577375,
+    "p99_ms_max": 6.987708,
+    "server_cpu_cores": 5.52774535817788,
+    "mean_batch": 3.3303120846615837,
+    "errors": 0
+  },
+  {
+    "workers": 8,
+    "connections": 64,
+    "rps": 34683.0,
+    "rps_min": 33766.375,
+    "rps_max": 35006.375,
+    "p50_ms": 1.521792,
+    "p99_ms": 6.100959,
+    "p99_ms_min": 6.053833,
+    "p99_ms_max": 6.625208,
+    "server_cpu_cores": 5.5292771718584515,
+    "mean_batch": 1.9171983242518003,
+    "errors": 0
+  },
+  {
+    "workers": 16,
+    "connections": 64,
+    "rps": 35079.5,
+    "rps_min": 34316.5,
+    "rps_max": 36845.375,
+    "p50_ms": 1.413541,
+    "p99_ms": 5.739334,
+    "p99_ms_min": 5.29975,
+    "p99_ms_max": 5.773125,
+    "server_cpu_cores": 5.658526778986231,
+    "mean_batch": 1.4613307409807734,
+    "errors": 0
+  }
+]

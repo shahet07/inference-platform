@@ -1,0 +1,74 @@
+[
+  {
+    "connections": 1,
+    "max_wait_us": 0,
+    "rps": 9004.8,
+    "p50_ms": 0.109417,
+    "p99_ms": 0.148292,
+    "mean_batch": 1.0
+  },
+  {
+    "connections": 1,
+    "max_wait_us": 200,
+    "rps": 1634.6,
+    "p50_ms": 0.56425,
+    "p99_ms": 1.047541,
+    "mean_batch": 1.0
+  },
+  {
+    "connections": 1,
+    "max_wait_us": 1000,
+    "rps": 543.4,
+    "p50_ms": 1.852709,
+    "p99_ms": 2.440416,
+    "mean_batch": 1.0
+  },
+  {
+    "connections": 16,
+    "max_wait_us": 0,
+    "rps": 36740.6,
+    "p50_ms": 0.41,
+    "p99_ms": 1.008166,
+    "mean_batch": 1.327158842811736
+  },
+  {
+    "connections": 16,
+    "max_wait_us": 200,
+    "rps": 29628.0,
+    "p50_ms": 0.542958,
+    "p99_ms": 0.823416,
+    "mean_batch": 3.4269258181958278
+  },
+  {
+    "connections": 16,
+    "max_wait_us": 1000,
+    "rps": 10460.8,
+    "p50_ms": 1.674709,
+    "p99_ms": 2.3135,
+    "mean_batch": 4.504552950455295
+  },
+  {
+    "connections": 64,
+    "max_wait_us": 0,
+    "rps": 33092.2,
+    "p50_ms": 1.420375,
+    "p99_ms": 7.105167,
+    "mean_batch": 3.293366837515809
+  },
+  {
+    "connections": 64,
+    "max_wait_us": 200,
+    "rps": 33505.2,
+    "p50_ms": 1.535375,
+    "p99_ms": 6.721417,
+    "mean_batch": 5.47841053037396
+  },
+  {
+    "connections": 64,
+    "max_wait_us": 1000,
+    "rps": 32810.2,
+    "p50_ms": 1.535167,
+    "p99_ms": 6.503417,
+    "mean_batch": 7.349218578032137
+  }
+]
