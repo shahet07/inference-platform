@@ -1,10 +1,13 @@
 // Runs a producer and a consumer in one process, restarting from nothing but disk each time. The
 // producer sends every event from the beginning on each start, as a client retrying after a crash
 // would. When all events have been consumed, this prints the final totals and exits.
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <span>
@@ -36,7 +39,36 @@ int main(int argc, char** argv) {
                             .wal = wal});
     const auto group = log.registerDurableGroup("exactly-once");
 
-    std::thread producer([&log] {
+    // A history of what each start recovered, for diagnosing a failure afterwards.
+    {
+      std::ofstream history(dir + "/starts.log", std::ios::app);
+      for (std::size_t shard = 0; shard < kShards; ++shard) {
+        const auto position = log.position(shard);
+        const std::string shard_dir = dir + "/log/shard-" + std::to_string(shard);
+        std::string snapshot = "none";
+        if (std::ifstream file(shard_dir + "/producers.snapshot"); file) {
+          std::uint64_t producer = 0;
+          std::uint64_t sequence = 0;
+          snapshot = file >> producer >> sequence ? std::to_string(sequence) : "empty";
+        }
+        std::vector<std::string> segments;
+        for (const auto& entry : std::filesystem::directory_iterator(shard_dir)) {
+          if (entry.path().extension() == ".log") {
+            segments.push_back(entry.path().stem().string());
+          }
+        }
+        std::ranges::sort(segments);
+        history << "shard=" << shard << " head=" << position.head << " tail=" << position.tail
+                << " highest_seq=" << position.highest_sequence << " snapshot=" << snapshot
+                << " segments=" << segments.size()
+                << " first=" << (segments.empty() ? "" : segments.front()) << "\n";
+      }
+      history << "--\n";
+    }
+
+    std::atomic<int> last_status{-1};
+    std::atomic<std::uint64_t> last_sequence{0};
+    std::thread producer([&log, &last_status, &last_sequence] {
       for (std::uint64_t i = 1; i <= kEvents; ++i) {
         const auto status = log.appendIdempotent({.key = "key-" + std::to_string(i % kKeys),
                                                   .value = static_cast<double>(i % 7),
@@ -44,6 +76,8 @@ int main(int argc, char** argv) {
                                                   .producer_id = 1,
                                                   .sequence = i})
                                 .status;
+        last_status = static_cast<int>(status);
+        last_sequence = i;
         if (status == stream::AppendStatus::kClosed) {
           return;
         }
@@ -82,10 +116,39 @@ int main(int argc, char** argv) {
         aggregator->checkpoint();
       });
     }
+    // If nothing moves for a long time, says exactly where everything is, and exits. A hang here
+    // means an event is missing, and this turns it into a diagnosis.
+    std::atomic<bool> finished{false};
+    std::thread watchdog([&] {
+      std::uint64_t last = 0;
+      int still = 0;
+      while (!finished.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        const std::uint64_t now = consumed.load();
+        still = now == last ? still + 1 : 0;
+        last = now;
+        if (still >= 75) {
+          std::cerr << "STALLED consumed=" << now << " of " << kEvents << "\n";
+          for (std::size_t shard = 0; shard < kShards; ++shard) {
+            const auto position = log.position(shard);
+            std::cerr << "  shard " << shard << " head=" << position.head
+                      << " readable=" << position.readable << " tail=" << position.tail
+                      << " wal_failed=" << position.wal_failed
+                      << " consumer_offset=" << aggregators[shard]->offset() << "\n";
+          }
+          std::cerr << "  producer last status: " << last_status.load() << " at sequence "
+                    << last_sequence.load() << "\n"
+                    << std::flush;
+          std::_Exit(3);
+        }
+      }
+    });
     producer.join();
     for (std::thread& consumer : consumers) {
       consumer.join();
     }
+    finished = true;
+    watchdog.join();
 
     std::uint64_t total = 0;
     double sum = 0.0;

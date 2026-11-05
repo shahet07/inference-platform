@@ -287,6 +287,20 @@ LogStats ShardedLog::stats() const {
   return total;
 }
 
+ShardedLog::ShardPosition ShardedLog::position(std::size_t shard_index) const {
+  Shard& shard = *shards_.at(shard_index);
+  const std::scoped_lock lock(shard.mutex);
+  std::uint64_t highest = 0;
+  for (const auto& [producer, sequence] : shard.producers) {
+    highest = std::max(highest, sequence);
+  }
+  return {.head = shard.head,
+          .readable = readableEnd(shard),
+          .tail = shard.tail,
+          .wal_failed = shard.wal && !shard.wal->failure().empty(),
+          .highest_sequence = highest};
+}
+
 std::string ShardedLog::renderPrometheus() const {
   const LogStats s = stats();
   std::ostringstream out;

@@ -309,6 +309,11 @@ void ShardWal::enqueue(std::uint64_t offset, const Event& event) {
   has_data_.notify_one();
 }
 
+std::string ShardWal::failure() {
+  const std::scoped_lock lock(mutex_);
+  return failure_;
+}
+
 std::uint64_t ShardWal::durableUpTo() {
   const std::scoped_lock lock(mutex_);
   return durable_up_to_;
@@ -332,6 +337,7 @@ void ShardWal::flushLoop() {
     const std::uint64_t next_offset = buffered_up_to_;
     lock.unlock();
     bool ok = true;
+    std::string error;
     try {
       if (!bytes.empty()) {
         writeOut(bytes, next_offset);
@@ -345,14 +351,16 @@ void ShardWal::flushLoop() {
         syncCurrent();
       }
       applyTrim();
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
       // A failed write or sync leaves the file's state unknown, so nothing further counts as
       // durable.
       ok = false;
+      error = e.what();
     }
     lock.lock();
     if (!ok) {
       failed_ = true;
+      failure_ = error;
       durable_.notify_all();
       return;
     }
@@ -479,10 +487,19 @@ void ShardWal::applyTrim() {
     return;
   }
   // A sealed segment ends where the next one starts, so it can go if that is at or below the mark.
+  bool snapshotted = false;
   while (!sealed_.empty()) {
     const std::uint64_t next_start = sealed_.size() > 1 ? sealed_[1].first_offset : current_first_;
     if (next_start > below) {
       break;
+    }
+    // Written before anything is removed, or retries of those events would stop being recognized.
+    // The log is synced first: if the snapshot named events a crash could lose, their retries would
+    // look like duplicates, and the events would be gone for good.
+    if (!snapshotted) {
+      syncCurrent();
+      saveProducers();
+      snapshotted = true;
     }
     const Segment segment = sealed_.front();
     if (config_.archive) {

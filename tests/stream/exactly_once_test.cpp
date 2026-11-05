@@ -2,12 +2,14 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include "stream/sharded_log.h"
@@ -87,19 +89,29 @@ TEST_F(ExactlyOnceTest, DeduplicationSurvivesRestart) {
 }
 
 TEST_F(ExactlyOnceTest, DeduplicationSurvivesTheLogBeingTrimmed) {
+  const fs::path first_segment = dir_ / "log" / "shard-0" / "00000000000000000000.log";
   {
     ShardedLog log(config());
     const auto group = log.registerGroup();
-    for (std::uint64_t s = 1; s <= 40; ++s) {
-      (void)log.appendIdempotent(idempotent(s));
+    for (std::uint64_t s = 1; s <= 10; ++s) {
+      ASSERT_EQ(log.appendIdempotent(idempotent(s)).status, AppendStatus::kAppended);
     }
-    log.commit(group, 0, 40);
-    // Sealed segments are removed on the log's thread. Leaving scope waits for it to finish.
-    (void)log.appendIdempotent(idempotent(41));
+    // Events from no producer then fill the segments that remain, so that once the early ones are
+    // trimmed, nothing on disk but the snapshot can say what producer 7 has sent.
+    for (int i = 0; i < 40; ++i) {
+      (void)log.append({.key = "k", .value = 1.0});
+    }
+    log.commit(group, 0, 50);
+    for (int attempt = 0; attempt < 5000 && fs::exists(first_segment); ++attempt) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    ASSERT_FALSE(fs::exists(first_segment)) << "the first segment was never trimmed";
+    (void)log.append({.key = "k", .value = 1.0});
   }
   ShardedLog log(config());
   EXPECT_EQ(log.appendIdempotent(idempotent(1)).status, AppendStatus::kDuplicate);
-  EXPECT_EQ(log.appendIdempotent(idempotent(41)).status, AppendStatus::kDuplicate);
+  EXPECT_EQ(log.appendIdempotent(idempotent(10)).status, AppendStatus::kDuplicate);
+  EXPECT_EQ(log.appendIdempotent(idempotent(11)).status, AppendStatus::kAppended);
 }
 
 TEST_F(ExactlyOnceTest, ReplayAfterCheckpointDoesNotDoubleCount) {

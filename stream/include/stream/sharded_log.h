@@ -113,6 +113,15 @@ class ShardedLog {
   [[nodiscard]] std::size_t shardCount() const { return shards_.size(); }
   [[nodiscard]] std::size_t shardFor(std::string_view key) const;
   [[nodiscard]] LogStats stats() const;
+
+  struct ShardPosition {
+    std::uint64_t head = 0;              // Oldest retained offset.
+    std::uint64_t readable = 0;          // Readers can go up to here.
+    std::uint64_t tail = 0;              // Next offset to assign.
+    bool wal_failed = false;             // The write-ahead log hit an error and stopped.
+    std::uint64_t highest_sequence = 0;  // Across producers, for idempotent appends.
+  };
+  [[nodiscard]] ShardPosition position(std::size_t shard) const;
   [[nodiscard]] std::string renderPrometheus() const;
 
  private:

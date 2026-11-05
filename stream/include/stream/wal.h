@@ -110,6 +110,8 @@ class ShardWal {
   // The offset after the last record that has met the fsync policy. Readers stop here, so that
   // nobody acts on an event a crash could still erase.
   [[nodiscard]] std::uint64_t durableUpTo();
+  // Why the log stopped, if it did. Empty otherwise.
+  [[nodiscard]] std::string failure();
 
   // Consumers have passed `offset`, so sealed segments entirely below it can leave local disk.
   void trimBelow(std::uint64_t offset);
@@ -156,6 +158,7 @@ class ShardWal {
   std::map<std::uint64_t, std::uint64_t> pending_producers_;  // Sequences not yet written out.
   bool stopping_ = false;
   bool failed_ = false;
+  std::string failure_;
 
   // Lets the interval sync thread find the open file while the flush thread may be replacing it.
   mutable std::mutex fd_mutex_;
